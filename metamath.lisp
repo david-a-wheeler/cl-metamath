@@ -19,55 +19,57 @@ do-external-symbols (sym find-package('iterate))
   if not(eq(sym 'iterate:iterate))
     import(sym)
 
+
 ; Return "true" if c is whitespace character.
 defun whitespace-char-p (c)
+  declare $ type character c
   {char=(c #\space) or not(graphic-char-p(c))}
 
-defun consume-whitespace (&optional (stream *standard-input*))
+defun consume-whitespace ()
+  declare $ optimize speed(3) safety(0)
   iter
-     for c = peek-char(nil stream nil nil)
+     for c = peek-char(nil nil nil nil)
      while {c and whitespace-char-p(c)}
-     read-char stream
+     read-char()
+declaim $ inline consume-whitespace
 
 ; Read a whitespace-terminated token; returns it as a symbol. EOF returns nil.
-defun read-token (&optional (stream *standard-input*))
-  consume-whitespace stream
-  iter
-     for c = peek-char(nil stream nil nil) ; include whitespace
-     while {c and not(whitespace-char-p(c))}
-     collect read-char(stream) into letters
-     ; finally return(intern(coerce(letters 'string)))
-     finally $ return
-       if letters
-         intern coerce(letters 'string)
-         nil
+defun read-token ()
+  declare $ optimize speed(3) safety(0)
+  consume-whitespace()
+  if not(peek-char(nil nil nil nil))
+    nil
+    iter
+       for c = peek-char(nil nil nil nil) ; include whitespace
+       while {c and not(whitespace-char-p(c))}
+       collect (the character read-char()) into letters
+       finally $ return
+         intern coerce(letters 'simple-string)
 
 ; Skip characters within a "$(" comment.
 ; "$)" ends, but must be whitespace separated.
-defun read-comment (&optional (stream *standard-input*))
+defun read-comment ()
+  declare $ optimize speed(3) safety(0)
   iter
-     consume-whitespace stream
-     for c = peek-char(nil stream nil nil)
+     consume-whitespace
+     for c = peek-char(nil nil nil nil)
      while c
      if eq(c #\$)
-       if eq(read-token(stream) '|$)|) finish()
-       read-char stream
+       if eq(read-token() '|$)|) finish()
+       read-char()
 
-
-defun process-metamath-file (&optional (stream *standard-input*))
+; Read a metamath file from *standard-input*
+defun process-metamath-file ()
+  declare $ optimize speed(3) safety(0)
   format t "process-metamath-file.~%"
   iter
-    for tok next read-token(stream)
+    declare $ type atom tok
+    for tok next read-token()
     while tok
-    print tok
+    ; print tok
     cond
-      eq(tok '|$(|) read-comment(stream)
-      t princ(tok)
-  ; do
-  ;   ((tok read-token(stream) read-token(stream)))
-  ;   ((eq tok 'end) nil)
-  ;   princ tok
-
+      eq(tok '|$(|) read-comment()
+      ; t princ(tok)
 
 format t "Starting.~%"
 process-metamath-file()
