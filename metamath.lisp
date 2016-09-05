@@ -36,15 +36,19 @@ declaim $ inline consume-whitespace
 ; Read a whitespace-terminated token; returns it as a symbol. EOF returns nil.
 defun read-token ()
   declare $ optimize speed(3) safety(0)
-  consume-whitespace()
-  if not(peek-char(nil nil nil nil))
-    nil
-    iter
-       for c = peek-char(nil nil nil nil) ; include whitespace
-       while {c and not(whitespace-char-p(c))}
-       collect (the character read-char()) into letters
-       finally $ return
-         intern coerce(letters 'simple-string)
+  let
+    $ cur make-array(20 :element-type 'character :fill-pointer 0 :adjustable t)
+    consume-whitespace()
+    if not(peek-char(nil nil nil nil))
+      nil
+      iter
+         for c = peek-char(nil nil nil nil) ; include whitespace
+         while {c and not(whitespace-char-p(c))}
+         ; collect (the character read-char()) into letters
+         vector-push-extend read-char() cur
+         finally $ return
+           intern coerce(cur 'simple-string)
+
 
 ; Skip characters within a "$(" comment.
 ; "$)" ends, but must be whitespace separated.
