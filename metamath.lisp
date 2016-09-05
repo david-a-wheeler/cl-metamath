@@ -2,15 +2,22 @@
 
 ; Startup.
 ; We assume we have a working ASDF.  Force load of local quicklisp.
-(load (merge-pathnames "quicklisp/setup.lisp" 
+(load (merge-pathnames "quicklisp/setup.lisp"
       (user-homedir-pathname)))
 
 ; Turn on optimization early.
 (declaim (optimize speed))
 
 ; Load Libraries
-(quicklisp:quickload "readable" :silent t)
-(quicklisp:quickload "iterate" :silent t)
+(quicklisp:quickload "readable" :silent t) ; Easy-to-read program notation
+(quicklisp:quickload "iterate" :silent t)  ; Improved iterator
+
+(require :sb-posix)
+
+; osicat requires a version of ASDF that's not in Ubuntu 2014, and
+; we can't override sbcl's ASDF, so we're stuck - can't use osicat for
+; common setups (like Travis).
+; (quicklisp:quickload "osicat" :silent t)  ; Use "mmap" for fast reading
 
 ; Switch to sweet-expressions - from here on it's more readable.
 (readable:enable-sweet)
@@ -75,7 +82,7 @@ defun process-metamath-file ()
     ; print tok
     cond
       eq(tok '|$(|) read-comment()
-      ; t princ(tok)
+      t princ(tok)
 
 defun read-char-repeatedly ()
   (declare (optimize (speed 3) (debug 0) (safety 0)))
@@ -84,7 +91,26 @@ defun read-char-repeatedly ()
      while c
 
 
+; Here's a non-portable SBCL-specific approach, but can't get it working:
+; See: https://groups.google.com/forum/#!topic/comp.lang.lisp/MlyWkTNwks4
+(defun mmap-lisp-object (map-file)
+  "Return a lisp object, corresponding to data dumped into a file."
+  (with-open-file (file map-file)
+    (let* ((sap (sb-posix:mmap nil
+                               (file-length file)
+                               sb-posix:prot-read
+                               sb-posix:map-private
+                               (sb-impl::fd-stream-fd file)
+                               0))
+           (addr (logior (sb-sys:sap-int sap)
+                         sb-vm:other-pointer-lowtag)))
+      (sb-kernel:make-lisp-obj addr))))
+; This tries to use it, and fails.
+; defvar mm
+; setq mm mmap-lisp-object("hello.mm")
 
+; Profile code.  The naive read-char implementation spends all its time
+; in read-char/peek-char functions (including the Lisp/C interface and syscall)
 ; (require :sb-sprof)
 ; (sb-sprof:with-profiling (:report :flat
 ;                           :show-progress t)
@@ -96,7 +122,7 @@ defun read-char-repeatedly ()
 
 ; http://stackoverflow.com/questions/38667846/how-to-improve-the-speed-of-reading-a-large-file-in-common-lisp-line-by-line
 ;  shows an example
-(defun count-lines (file &optional (buffer-size 32768))
+(defun count-lines (file &optional (buffer-size 50000000)) ; Orig size 32768
   (declare (optimize (speed 3) (debug 0) (safety 0))
            (type fixnum buffer-size))
   (let* ((buffer-element-type '(unsigned-byte 8))
@@ -118,16 +144,31 @@ defun read-char-repeatedly ()
                     (aref buffer i))
              (incf sum)))))))
 
+defvar mmbuffer
+defun load-mmfile (filename)
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  let*
+    (
+      (buffer-element-type '(unsigned-byte 8))
+      (mmbuffer make-array(50000000 :element-type '(unsigned-byte 8)))
+    with-open-file (in filename :element-type '(unsigned-byte 8))
+      read-sequence mmbuffer in
+
 format t "Starting.~%"
 
-; This takes 4 seconds:
-; read-char-repeatedly()
+; This takes less than 1 second - read in *en masse* using read-sequence
+load-mmfile "../set.mm/set.mm"
 
-; This takes less than 1 second:
+; This takes less than 1 second, but the interior structure
+; makes it less convenient:
 ; count-lines("../set.mm/set.mm")
 
-; This takes about 23 seconds:
-process-metamath-file()
+; This takes 4 seconds - there may be mild specialized optimizations
+; that don't scale (not clear yet):
+; read-char-repeatedly()
+
+; This takes about 23 seconds (reading and consing):
+; process-metamath-file()
 
 format t "Ending.~%"
 
