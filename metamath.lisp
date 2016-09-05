@@ -5,6 +5,9 @@
 (load (merge-pathnames "quicklisp/setup.lisp" 
       (user-homedir-pathname)))
 
+; Turn on optimization early.
+(declaim (optimize speed))
+
 ; Load Libraries
 (quicklisp:quickload "readable" :silent t)
 (quicklisp:quickload "iterate" :silent t)
@@ -18,7 +21,6 @@
 do-external-symbols (sym find-package('iterate))
   if not(eq(sym 'iterate:iterate))
     import(sym)
-
 
 ; Return "true" if c is whitespace character.
 defun whitespace-char-p (c)
@@ -75,8 +77,58 @@ defun process-metamath-file ()
       eq(tok '|$(|) read-comment()
       ; t princ(tok)
 
+defun read-char-repeatedly ()
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+  iter
+     for c = read-char(nil nil nil nil)
+     while c
+
+
+
+; (require :sb-sprof)
+; (sb-sprof:with-profiling (:report :flat
+;                           :show-progress t)
+;  process-metamath-file())
+
+; http://www.gigamonkeys.com/book/files-and-file-io.html
+;  READ-SEQUENCE is likely to be quite a bit more efficient
+;  than filling a sequence by repeatedly calling READ-BYTE or READ-CHAR.
+
+; http://stackoverflow.com/questions/38667846/how-to-improve-the-speed-of-reading-a-large-file-in-common-lisp-line-by-line
+;  shows an example
+(defun count-lines (file &optional (buffer-size 32768))
+  (declare (optimize (speed 3) (debug 0) (safety 0))
+           (type fixnum buffer-size))
+  (let* ((buffer-element-type '(unsigned-byte 8))
+        (buffer
+         (make-array buffer-size
+                     :element-type buffer-element-type))
+        (sum 0)
+        (end 0))
+    (declare (type fixnum sum end))
+    (with-open-file (in file :element-type buffer-element-type)
+      (loop
+         (setf end (read-sequence buffer in))
+         (when (= end 0)
+           (return sum))
+         (dotimes (i end)
+           (declare (type fixnum i)
+                    (dynamic-extent i))
+           (when (= 10
+                    (aref buffer i))
+             (incf sum)))))))
+
 format t "Starting.~%"
+
+; This takes 4 seconds:
+; read-char-repeatedly()
+
+; This takes less than 1 second:
+; count-lines("../set.mm/set.mm")
+
+; This takes about 23 seconds:
 process-metamath-file()
+
 format t "Ending.~%"
 
 ; End of file, restore readtable.
