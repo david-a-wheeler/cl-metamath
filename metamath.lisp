@@ -12,7 +12,7 @@
 (quicklisp:quickload "readable" :silent t) ; Easy-to-read program notation
 (quicklisp:quickload "iterate" :silent t)  ; Improved iterator
 
-; Switch to sweet-expressions - from here on it's more readable.
+; Switch to sweet-expressions - from here on the code is more readable.
 (readable:enable-sweet)
 
 ; Import symbols from "iterate" package for ease-of-use.  Annoyingly,
@@ -22,8 +22,16 @@ do-external-symbols (sym find-package('iterate))
   if not(eq(sym 'iterate:iterate))
     import(sym)
 
+; Function to get command line arguments.
+defun my-command-line ()
+  (or
+    #+SBCL (cddr *posix-argv*) ; cddr to drop "sbcl" "--"
+    #+LISPWORKS system:*line-arguments-list*
+    #+CMU extensions:*command-line-words*
+    nil)
 
-; Extra code to *quickly* read files.  This deserves an explanation.
+; Extra code to *quickly* read files.  This brings tokenization times down
+; from ~24 seconds to ~4 seconds.  This deserves an explanation.
 ; Lisp's read-char and peek-char provide the necessary functions, but per
 ; <http://www.gigamonkeys.com/book/files-and-file-io.html>,
 ;  "READ-SEQUENCE is likely to be quite a bit more efficient
@@ -33,8 +41,7 @@ do-external-symbols (sym find-package('iterate))
 ; The osicat library requires a version of ASDF that's not in Ubuntu 2014, and
 ; we can't override sbcl's ASDF, so we can't use osicat for common setups.
 ; SBCL has a nonportable interface to mmap, but it's poorly documented.
-
-; For now, just load the whole file at once.  It the future we could
+; For now, just load the whole file at once.  In the future we could
 ; use a loop over a big buffer.  For an example, see:
 ; http://stackoverflow.com/questions/38667846/how-to-improve-the-speed-of-reading-a-large-file-in-common-lisp-line-by-line
 
@@ -62,6 +69,9 @@ defun my-peek-char ()
   if {mmbuffer-position >= mmbuffer-length}
     nil
     code-char aref(mmbuffer mmbuffer-position)
+
+
+;
 
 ; Return "true" if c is whitespace character.
 defun whitespace-char-p (c)
@@ -116,7 +126,7 @@ defun process-metamath-file ()
     ; print tok
     cond
       eq(tok '|$(|) read-comment()
-      ; t format(t "~S~%" tok)
+      t format(t "~S~%" tok)
 
 ; Profile code.
 ; (require :sb-sprof)
@@ -126,9 +136,10 @@ defun process-metamath-file ()
 
 format t "Starting.~%"
 
-; This takes less than 1 second - read in *en masse* using read-sequence
-load-mmfile "../set.mm/set.mm"
-; load-mmfile "hello.mm"
+; Load .mm file.  For speed we'll load the whole thing straight to memory.
+; We force people to provide a filename (as parameter #1), so later if we
+; use mmap there will be no interface change.
+load-mmfile car(my-command-line())
 
 format t "File loaded.  Now processing.~%"
 process-metamath-file()
