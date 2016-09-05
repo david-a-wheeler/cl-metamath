@@ -1,18 +1,26 @@
 
+# meatmath-lisp
 
-* Pick a Common Lisp implementation, e.g., sbcl
-* Install the QuickLisp package manager (if it isn't already).
+This is the start of a metamath verifier in Common Lisp,
+
+This is very early and does NOT really implement verification.
+At this time it's a study in how to efficiently parse the file in Common Lisp.
+
+It uses sweet-expressions so that the code is much easier to read
+for most developers compared to traditional Common Lisp notation.
+
+The scripts depend on sbcl, but the code should run on any
+Common Lisp implementation.
+
+You need to install a relatively current version of QuickLisp.
+You can do this with:
 
 ~~~~
-wget https://beta.quicklisp.org/quicklisp.lisp # Get Quicklisp installer
-sbcl # or whatever Lisp implementation
-(load "quicklisp.lisp")
-(quicklisp-quickstart:install)  ; Install QuickLisp (also installs ASDF)
-(ql:add-to-init-file)           ; Add QuickLisp to your Lisp init file
+make install-quicklisp
 ~~~~
 
-Running the program will automatically download and install its
-depedencies.  You can force download ahead-of-time:
+You can then run the program with "run"; standard input should be
+a valid metmath file:
 
 ~~~~
 (ql:quickload "readable")
