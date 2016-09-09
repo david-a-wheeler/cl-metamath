@@ -1,6 +1,7 @@
-
-
 # We lamely force the use of SBCL.  Portability improvements welcome.
+
+install-sbcl:
+	install-sbcl
 
 install-quicklisp:
 	sbcl --non-interactive --load install-quicklisp.lisp

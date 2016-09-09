@@ -1,34 +1,36 @@
-; Implement metamath-related operations
+;;;; Implement metamath-related operations
 
-; Startup.
-; We assume we have a working ASDF.  Force load of local quicklisp.
-(load (merge-pathnames "quicklisp/setup.lisp"
-      (user-homedir-pathname)))
+;;; Startup.
+;;; We assume we have the following working:
+;;; - ASDF (for loading packages on machine) / uiop (for basic I/O)
+;;; - Quicklisp (to download/manage external packages)
 
-; Turn on optimization early.
+(cl:in-package #:cl-user)
 (declaim (optimize speed))
 
 ; Load Libraries
+(require "asdf")
 (quicklisp:quickload "readable" :silent t) ; Easy-to-read program notation
 (quicklisp:quickload "iterate" :silent t)  ; Improved iterator
+(quicklisp:quickload "alexandria" :silent t)  ; Improved iterator
+
+(defpackage #:metamath
+  (:use #:cl
+        #:iterate ; Improved iterator
+        #:uiop)   ; Part of ASDF, provides *command-line-arguments*
+  (:export #:main
+           #:load-mmfile
+           #:process-metamath-file))
+
+(cl:in-package #:metamath)
 
 ; Switch to sweet-expressions - from here on the code is more readable.
 (readable:enable-sweet)
 
-; Import symbols from "iterate" package for ease-of-use.  Annoyingly,
-; it exports the language keyword "iterate", so we can't just call use-package.
-; Instead, import everything *except* the conflicting symbol.
-do-external-symbols (sym find-package('iterate))
-  if not(eq(sym 'iterate:iterate))
-    import(sym)
+import 'alexandria:define-constant
 
-; Function to get command line arguments.
-defun my-command-line ()
-  (or
-    #+SBCL (cddr *posix-argv*) ; cddr to drop "sbcl" "--"
-    #+LISPWORKS system:*line-arguments-list*
-    #+CMU extensions:*command-line-words*
-    nil)
+; TODO: Find the routine to do this less hackishly; it's not *package*.
+define-constant self-package find-package('metamath)
 
 ; Extra code to *quickly* read files.  This brings tokenization times down
 ; from ~24 seconds to ~4 seconds.  This deserves an explanation.
@@ -52,10 +54,12 @@ defvar mmbuffer
 defvar mmbuffer-position 0
 defvar mmbuffer-length 0
 defun load-mmfile (filename)
+  format t "DEBUG: Starting load-mmfile~%"
   ; (declare (optimize (speed 3) (debug 0) (safety 0)))
   let* ((buffer-element-type '(unsigned-byte 8)))
     setf mmbuffer make-array(100000000 :element-type buffer-element-type)
     with-open-file (in filename :element-type '(unsigned-byte 8))
+      format t "DEBUG: Inside with-open-file~%"
       setf mmbuffer-length read-sequence(mmbuffer in)
   nil
 
@@ -82,16 +86,23 @@ defun whitespace-char-p (c)
   declare $ type character c
   {char=(c #\space) or not(graphic-char-p(c))}
 
+declaim $ inline consume-whitespace
 defun consume-whitespace ()
   declare $ optimize speed(3) safety(0)
   iter
      for c = my-peek-char()
      while {c and whitespace-char-p(c)}
      my-read-char()
-declaim $ inline consume-whitespace
+
+define-constant this-package *package*
 
 ; Read a whitespace-terminated token; returns it as a symbol. EOF returns nil.
 ; This first skips any leading whitespace.
+; We intentionally intern all symbols into private symbols within this
+; package, so we don't pollute the namespace of potential callers, and so
+; that we can easily inline constants like '|$p|.  We could put the symbols
+; into *package*, but then we'd need to change the rest of the code so that
+; comparisons with inline constants like '|$p| would work.
 defun read-token ()
   declare $ optimize speed(3) safety(0)
   consume-whitespace()
@@ -105,7 +116,7 @@ defun read-token ()
          ; collect (the character my-read-char()) into letters
          vector-push-extend my-read-char() cur
          finally $ return
-           intern coerce(cur 'simple-string)
+           intern coerce(cur 'simple-string) self-package
 
 
 ; Skip characters within a "$(" comment.
@@ -113,6 +124,7 @@ defun read-token ()
 ; TODO: Detect unterminated comment.
 defun read-comment ()
   declare $ optimize speed(3) safety(0)
+  format t "DEBUG read-comment"
   iter
      consume-whitespace
      for c = my-peek-char()
@@ -219,7 +231,7 @@ defun process-metamath-file ()
     declare $ type atom tok
     for tok next read-token()
     while tok
-    ; print tok
+    print tok
     ; Note - at this point "tok" is not null.
     ; TODO: Handle "begin with $" specially - error if not listed.
     cond
@@ -231,24 +243,25 @@ defun process-metamath-file ()
       eq(tok '|$}|) format(t "DEBUG: $}~%") ; TODO
       t read-labelled(tok)
 
-; Profile code.
-; (require :sb-sprof)
-; (sb-sprof:with-profiling (:report :flat
-;                           :show-progress t)
-;  process-metamath-file())
-
-format t "Starting.~%"
-
-; Load .mm file.  For speed we'll load the whole thing straight to memory.
-; We force people to provide a filename (as parameter #1), so later if we
-; use mmap there will be no interface change.
-load-mmfile car(my-command-line())
-
-format t "File loaded.  Now processing.~%"
-process-metamath-file()
-
-format t "Ending.~%"
-
+; main entry for command line.
+defun main ()
+  format t "Starting metamath.~%"
+  ; Profile code.
+  ; (require :sb-sprof)
+  ; (sb-sprof:with-profiling (:report :flat
+  ;                           :show-progress t)
+  ;  process-metamath-file())
+  ;
+  ; Load .mm file.  For speed we'll load the whole thing straight to memory.
+  ; We force people to provide a filename (as parameter #1), so later if we
+  ; use mmap there will be no interface change.
+  load-mmfile car(cddr(*command-line-arguments*))
+  ;
+  format t "File loaded.  Now processing.~%"
+  ;
+  process-metamath-file()
+  ;
+  format t "Ending.~%"
 
 ; End of file, restore readtable.
 (readable:disable-readable)

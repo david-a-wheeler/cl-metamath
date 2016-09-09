@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# Download & install sbcl
+
+# If SBCL_VERSION isn't set, give it a useful default value
+: ${SBCL_VERSION:="1.3.9-x86-64-linux"}
+
+SBCL_NAME="sbcl-${SBCL_VERSION}"
+wget http://prdownloads.sourceforge.net/sbcl/${SBCL_NAME}-binary.tar.bz2
+bzip2 -cd ${SBCL_NAME}-binary.tar.bz2 | tar xvf -
+cd ${SBCL_NAME}
+INSTALL_ROOT="${HOME}" ./install.sh
+
+# If you're running this longer-term, append these into .bashrc or similar:
+export SBCL_HOME="${HOME}/lib/sbcl"
+export PATH="${HOME}/bin:${PATH}" # Locally-installed one takes precedence
+
+# Store in .bashrc if it exists & SBCL_HOME isn't already in it:
+if [ -f "$HOME/.bashrc" ] && ! grep -q SBCL_HOME "$HOME/.bashrc" ; then
+  cat >> "$HOME/.bashrc" <<"END-EXACTLY"
+export SBCL_HOME="${HOME}/lib/sbcl"
+export PATH="${HOME}/bin:${PATH}"
+END-EXACTLY
+fi
