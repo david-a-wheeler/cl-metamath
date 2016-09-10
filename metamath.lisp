@@ -5,11 +5,36 @@
 ;;; - ASDF (for loading packages on machine) / uiop (for basic I/O)
 ;;; - Quicklisp (to download/manage external packages)
 
+;;; This is designed to be high performance. We want the code to be clear,
+;;; but some decisions make a big difference to performance.  Some tips:
+;;; - Minimize system/foreign calls, e.g., don't use the slow
+;;;   READ-CHAR/PEEK-CHAR calls.  Instead, read in a big buffer at once;
+;;;   this reduces tokenization from 24sec+ to ~4sec.
+;;; - Prefer defstructure over defclass; dispatch is slower than straight call.
+;;; - Maximize open coding, e.g., provide constants, define specific types
+;;; - Prefer arrays over linked lists (like lists) where it makes sense,
+;;;   even if you have to insert in middle (if we use small elements).
+;;;   Cache misses are a killer. Some may find this surprising. See:
+;;;   http://www.codeproject.com/Articles/340797/
+;;;          Number-crunching-Why-you-should-never-ever-EVER-us
+;;; - Prefer eq for equality checks
+;;; - http://www.cliki.net/performance (list of tips)
+;;; - https://www.cs.utexas.edu/users/novak/lispeff.html (Gordon S. Novak Jr)
+;;; - http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.150.640
+;;; - Inlining can sometimes harm performance, because of the limited
+;;;   number of registers available.  This is especially a
+;;;   a problem on x86 32-bit, because it only has 8 registers.
+;;;   However, x86_64 and ARM have 16 registers, not 8, so we'll use inlining
+;;;   under the assumption that we have more registers.  Inlining is only a
+;;;   hint; the compiler is allowed to figure out that it shouldn't
+;;;   actually inline it.
+;;;   We're really focused on fast execution for CPUs like x86_64 and ARM.
+
 (cl:in-package #:cl-user)
 (declaim (optimize speed))
 
 ; Load Libraries
-(require "asdf")
+(require "asdf") ; For packages loading.  Includes uiop
 (quicklisp:quickload "readable" :silent t) ; Easy-to-read program notation
 (quicklisp:quickload "iterate" :silent t)  ; Improved iterator
 (quicklisp:quickload "alexandria" :silent t)  ; Improved iterator
@@ -17,7 +42,7 @@
 (defpackage #:metamath
   (:use #:cl
         #:iterate ; Improved iterator
-        #:uiop)   ; Part of ASDF, provides *command-line-arguments*
+        #:uiop)   ; Part of ASDF
   (:export #:main
            #:load-mmfile
            #:process-metamath-file))
@@ -28,6 +53,17 @@
 (readable:enable-sweet)
 
 import 'alexandria:define-constant
+
+; TODO: where's the portable library for this?
+;(defun my-command-line ()
+;  (or
+;   #+SBCL *posix-argv*
+;   #+LISPWORKS system:*line-arguments-list*
+;   #+CMU extensions:*command-line-words*
+;   nil))
+
+defun my-command-line ()
+  '("demo0.mm")
 
 ; TODO: Find the routine to do this less hackishly; it's not *package*.
 define-constant self-package find-package('metamath)
@@ -54,12 +90,11 @@ defvar mmbuffer
 defvar mmbuffer-position 0
 defvar mmbuffer-length 0
 defun load-mmfile (filename)
-  format t "DEBUG: Starting load-mmfile~%"
+  ; format t "DEBUG: Starting load-mmfile~%"
   ; (declare (optimize (speed 3) (debug 0) (safety 0)))
   let* ((buffer-element-type '(unsigned-byte 8)))
     setf mmbuffer make-array(100000000 :element-type buffer-element-type)
     with-open-file (in filename :element-type '(unsigned-byte 8))
-      format t "DEBUG: Inside with-open-file~%"
       setf mmbuffer-length read-sequence(mmbuffer in)
   nil
 
@@ -73,6 +108,7 @@ defun my-read-char ()
 
 ; Optimized version of peek-char(nil nil nil nil)
 defun my-peek-char ()
+  declare $ optimize speed(3) safety(0)
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
@@ -82,7 +118,9 @@ defun my-peek-char ()
 ;
 
 ; Return "true" if c is whitespace character.
+declaim $ inline whitespace-char-p
 defun whitespace-char-p (c)
+  declare $ optimize speed(3) safety(0)
   declare $ type character c
   {char=(c #\space) or not(graphic-char-p(c))}
 
@@ -93,8 +131,6 @@ defun consume-whitespace ()
      for c = my-peek-char()
      while {c and whitespace-char-p(c)}
      my-read-char()
-
-define-constant this-package *package*
 
 ; Read a whitespace-terminated token; returns it as a symbol. EOF returns nil.
 ; This first skips any leading whitespace.
@@ -124,7 +160,6 @@ defun read-token ()
 ; TODO: Detect unterminated comment.
 defun read-comment ()
   declare $ optimize speed(3) safety(0)
-  format t "DEBUG read-comment"
   iter
      consume-whitespace
      for c = my-peek-char()
@@ -144,8 +179,6 @@ defun read-to-terminator (terminator)
          read-comment()
          next-iteration()
      collect tok
-     format t "DEBUG: In read-to-terminator ~S~%" tok
-
 
 ; Read rest of $c statement
 defun read-constant ()
@@ -168,7 +201,7 @@ defun read-constant ()
        ; if tok is label -> error "Attempt to reuse label ~S as constant"
        ; if tok is declared -> error "Attempt to redeclare ~S"
        ; Add constant "tok"
-       format t "DEBUG: Adding constant ~S~%" tok
+       ; format t "DEBUG: Adding constant ~S~%" tok
        finally
          if listempty
            error "Empty $c list"
@@ -177,37 +210,41 @@ defun read-constant ()
 ; Read rest of $d statement
 ; TODO: Really handle
 defun read-distinct ()
-  format t "Reading distinct~%"
+  ; format t "Reading distinct~%"
   read-to-terminator (quote |$.|)
 
 ; Read rest of $v statement
 ; TODO: Really handle
 defun read-variables ()
-  format t "Reading variables~%"
+  ; format t "Reading variables~%"
   read-to-terminator (quote |$.|)
 
 ; Read rest of $f
 ; TODO: Really handle
 defun read-f (label)
-  format t "Reading $f in label ~S~%" label
+  declare $ ignore label
+  ; format t "Reading $f in label ~S~%" label
   read-to-terminator (quote |$.|)
 
 ; Read rest of $e
 ; TODO: Really handle
 defun read-e (label)
-  format t "Reading $e in label ~S~%" label
+  declare $ ignore label
+  ; format t "Reading $e in label ~S~%" label
   read-to-terminator (quote |$.|)
 
 ; Read rest of $a
 ; TODO: Really handle
 defun read-a (label)
-  format t "Reading $a in label ~S~%" label
+  declare $ ignore label
+  ; format t "Reading $a in label ~S~%" label
   read-to-terminator (quote |$.|)
 
 ; Read rest of $p
 ; TODO: Really handle
 defun read-p (label)
-  format t "Reading $p in label ~S~%" label
+  declare $ ignore label
+  ; format t "Reading $p in label ~S~%" label
   read-to-terminator (quote |$.|)
 
 ; Read statement labelled "label".
@@ -231,7 +268,6 @@ defun process-metamath-file ()
     declare $ type atom tok
     for tok next read-token()
     while tok
-    print tok
     ; Note - at this point "tok" is not null.
     ; TODO: Handle "begin with $" specially - error if not listed.
     cond
@@ -239,8 +275,8 @@ defun process-metamath-file ()
       eq(tok '|$c|) read-constant()
       eq(tok '|$d|) read-distinct()
       eq(tok '|$v|) read-variables()
-      eq(tok '|${|) format(t "DEBUG: ${~%") ; TODO
-      eq(tok '|$}|) format(t "DEBUG: $}~%") ; TODO
+      eq(tok '|${|) nil ; TODO
+      eq(tok '|$}|) nil ; TODO
       t read-labelled(tok)
 
 ; main entry for command line.
@@ -255,7 +291,8 @@ defun main ()
   ; Load .mm file.  For speed we'll load the whole thing straight to memory.
   ; We force people to provide a filename (as parameter #1), so later if we
   ; use mmap there will be no interface change.
-  load-mmfile car(cddr(*command-line-arguments*))
+  format t "command line ~S~%" my-command-line()
+  load-mmfile (car my-command-line())
   ;
   format t "File loaded.  Now processing.~%"
   ;
