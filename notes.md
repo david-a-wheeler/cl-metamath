@@ -91,3 +91,15 @@ https://common-lisp.net/project/iterate/doc/Problems-with-Code-Movement.html#Pro
 
 http://stackoverflow.com/questions/27743440/how-do-i-read-whitespace-delimited-words-from-a-stream
 
+Qlot is a dependency management tool, probably ought to use it longer-term.
+http://quickdocs.org/qlot/
+
+~~~~
+wget http://www.xach.com/lisp/buildapp.tgz
+tar xvzf buildapp.tgz
+cd buildapp*
+make
+# Install in ~/bin
+make DESTDIR="$HOME" install
+cd ..
+~~~~
