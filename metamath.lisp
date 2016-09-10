@@ -6,29 +6,7 @@
 ;;; - Quicklisp (to download/manage external packages)
 
 ;;; This is designed to be high performance. We want the code to be clear,
-;;; but some decisions make a big difference to performance.  Some tips:
-;;; - Minimize system/foreign calls, e.g., don't use the slow
-;;;   READ-CHAR/PEEK-CHAR calls.  Instead, read in a big buffer at once;
-;;;   this reduces tokenization from 24sec+ to ~4sec.
-;;; - Prefer defstructure over defclass; dispatch is slower than straight call.
-;;; - Maximize open coding, e.g., provide constants, define specific types
-;;; - Prefer arrays over linked lists (like lists) where it makes sense,
-;;;   even if you have to insert in middle (if we use small elements).
-;;;   Cache misses are a killer. Some may find this surprising. See:
-;;;   http://www.codeproject.com/Articles/340797/
-;;;          Number-crunching-Why-you-should-never-ever-EVER-us
-;;; - Prefer eq for equality checks
-;;; - http://www.cliki.net/performance (list of tips)
-;;; - https://www.cs.utexas.edu/users/novak/lispeff.html (Gordon S. Novak Jr)
-;;; - http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.150.640
-;;; - Inlining can sometimes harm performance, because of the limited
-;;;   number of registers available.  This is especially a
-;;;   a problem on x86 32-bit, because it only has 8 registers.
-;;;   However, x86_64 and ARM have 16 registers, not 8, so we'll use inlining
-;;;   under the assumption that we have more registers.  Inlining is only a
-;;;   hint; the compiler is allowed to figure out that it shouldn't
-;;;   actually inline it.
-;;;   We're really focused on fast execution for CPUs like x86_64 and ARM.
+;;; but some decisions make a big difference to performance.
 
 (cl:in-package #:cl-user)
 (declaim (optimize speed))
@@ -68,23 +46,7 @@ defun my-command-line ()
 ; TODO: Find the routine to do this less hackishly; it's not *package*.
 define-constant self-package find-package('metamath)
 
-; Extra code to *quickly* read files.  This brings tokenization times down
-; from ~24 seconds to ~4 seconds.  This deserves an explanation.
-; Lisp's read-char and peek-char provide the necessary functions, but per
-; <http://www.gigamonkeys.com/book/files-and-file-io.html>,
-;  "READ-SEQUENCE is likely to be quite a bit more efficient
-;  than filling a sequence by repeatedly calling READ-BYTE or READ-CHAR."
-;  (verified in SBCL by profiling).
-; I'd like to use mmap(), but I've had a lot of trouble getting that to work.
-; The osicat library requires a version of ASDF that's not in Ubuntu 2014, and
-; we can't override sbcl's ASDF, so we can't use osicat for common setups.
-; SBCL has a nonportable interface to mmap, but it's poorly documented.
-; For now, just load the whole file at once.
-;
-; TODO:  In the future we could use a loop over a big buffer & handle
-; multiple files.
-; For an example, see:
-; http://stackoverflow.com/questions/38667846/how-to-improve-the-speed-of-reading-a-large-file-in-common-lisp-line-by-line
+; Extra code to *quickly* read files.
 
 defvar mmbuffer
 defvar mmbuffer-position 0
