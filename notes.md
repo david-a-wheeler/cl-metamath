@@ -71,7 +71,23 @@ Exceptions:
 - Indentation is 2-space.
 - Lines should normally be 80 characters or less.
 
+In Common Lisp () is identical to nil.
+Still, I'll try to use null(p) to mean "is this the empty list?",
+primarily so that it would be easier to port to other languages
+(like Scheme, where (), nil, and #f are different).
+
 Wimpie Nortje (Dark Chestnut) has interesting posts on how to
 deploy CL applications:
 https://www.darkchestnut.com/archive/
+
+Other relevant links:
+
+http://bimib.disco.unimib.it/people/Marco.Antoniotti/Projects/CL/HELAMBDAP/tests/asdf-uiop/docs/html/dictionary/dictionary.html
+Uiop docs
+
+http://ryepup.unwashedmeme.com/blog/2010/11/21/coroutines-in-common-lisp-with-bordeaux-threads/
+
+https://common-lisp.net/project/iterate/doc/Problems-with-Code-Movement.html#Problems-with-Code-Movement
+
+http://stackoverflow.com/questions/27743440/how-do-i-read-whitespace-delimited-words-from-a-stream
 
