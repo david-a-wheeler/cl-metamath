@@ -8,7 +8,7 @@
 ; Switch to sweet-expressions - from here on the code is more readable.
 (readable:enable-sweet)
 
-; declaim $ optimize speed
+declaim $ optimize speed
 
 ; import 'alexandria:define-constant
 
@@ -45,18 +45,22 @@ defun load-mmfile (filename)
 
 ; Optimized version of read-char()
 defun my-read-char ()
+  declare $ type fixnum mmbuffer-position mmbuffer-length
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
-      incf mmbuffer-position
+      declare $ type (unsigned-byte 8) result
+      setf mmbuffer-position $ the fixnum $ 1+ mmbuffer-position
       code-char result
 
 ; Optimized version of peek-char(nil nil nil nil)
 defun my-peek-char ()
   ; declare $ optimize speed(3) safety(0)
+  declare $ type fixnum mmbuffer-position mmbuffer-length
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
+      declare $ type (unsigned-byte 8) result
       if {result > 127}
         error "Code point >127: ~S." result
         code-char result
@@ -212,6 +216,7 @@ defun process-metamath-file ()
   iter
     for tok next read-token()
     while tok
+    format t "~S~%" tok
     ; Note - at this point "tok" is not null.
     ; TODO: Handle "begin with $" specially - error if not listed.
     cond
