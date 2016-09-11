@@ -46,6 +46,8 @@ defun load-mmfile (filename)
 ; Optimized version of read-char()
 defun my-read-char ()
   declare $ type fixnum mmbuffer-position mmbuffer-length
+  ;   (declare ((simple-array character) string))
+  (declare ((simple-array (unsigned-byte 8)) mmbuffer))
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
@@ -57,6 +59,7 @@ defun my-read-char ()
 defun my-peek-char ()
   ; declare $ optimize speed(3) safety(0)
   declare $ type fixnum mmbuffer-position mmbuffer-length
+  (declare ((simple-array (unsigned-byte 8)) mmbuffer))
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
