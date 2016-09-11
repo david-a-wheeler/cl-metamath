@@ -1,7 +1,10 @@
 ;;;; Implement metamath-related operations
+;;;; Copyright 2016, David A. Wheeler and the cl-metamath contributors
+;;;; SPDX-License-Identifier: MIT
 
 ;;; This is designed to be high performance. We want the code to be clear,
 ;;; but some decisions make a big difference to performance.
+;;; This is in many ways inspired by checkmm.cpp (which is CC0 licensed).
 
 (cl:in-package #:cl-metamath)
 
@@ -68,6 +71,29 @@ defun my-peek-char ()
         error "Code point >127: ~S." result
         code-char result
 
+
+
+
+defstruct scope
+  active-variables ; :type hash-table
+  active-hypotheses ; :type vector
+  disjoint-variables ; :type hash-table
+  floating-hypotheses ; :type hash-table
+
+defun create-scope ()
+  make-scope
+    :active-variables \\ make-hash-table()
+    :active-hypotheses \\ make-array(10 :fill-pointer 0 :adjustable t)
+    :disjoint-variables \\ make-hash-table()
+    :floating-hypotheses \\ make-hash-table()
+
+; list of currently-active scopes; first is deepest-nested scope
+defvar *scopes*
+
+
+
+
+
 ; Return "true" if c is whitespace character.
 declaim $ inline whitespace-char-p
 defun whitespace-char-p (c)
@@ -132,8 +158,8 @@ defun read-to-terminator (terminator)
 
 ; Read rest of $c statement
 defun read-constant ()
-  ; TODO: Error if scopes.size>1
-  ;   "$c statement incorrectly occurs in inner block"
+  if {length(*scopes*) > 1}
+    error "$c statement incorrectly occurs in inner block"
   let ((listempty t))
     iter
        for tok = read-token()
@@ -216,6 +242,7 @@ defun do-nothing ()
 defun process-metamath-file ()
   ; declare $ optimize speed(3) safety(0)
   format t "process-metamath-file.~%"
+  setq *scopes* list(create-scope()) ; TODO: Move out to separate init
   iter
     for tok next read-token()
     while tok
@@ -235,11 +262,6 @@ defun process-metamath-file ()
 defun main ()
   format t "Starting metamath.~%"
   ; Profile code.
-  ; (require :sb-sprof)
-  ; (sb-sprof:with-profiling (:report :flat
-  ;                           :show-progress t)
-  ;  process-metamath-file())
-  ;
   ; Load .mm file.  For speed we'll load the whole thing straight to memory.
   ; We force people to provide a filename (as parameter #1), so later if we
   ; use mmap there will be no interface change.
@@ -248,7 +270,12 @@ defun main ()
   ;
   format t "File loaded.  Now processing.~%"
   ;
+  ; require :sb-sprof
+  ; sb-sprof:with-profiling
+  ;   :report :flat :show-progress t
+  ;   process-metamath-file()
   process-metamath-file()
+  ;
   ;
   format t "Ending.~%"
 
