@@ -45,9 +45,9 @@ defun load-mmfile (filename)
 
 ; Optimized version of read-char()
 defun my-read-char ()
+  declare $ optimize speed(3) safety(0)
   declare $ type fixnum mmbuffer-position mmbuffer-length
-  ;   (declare ((simple-array character) string))
-  (declare ((simple-array (unsigned-byte 8)) mmbuffer))
+  declare simple-array(unsigned-byte(8))(mmbuffer)
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
@@ -57,9 +57,9 @@ defun my-read-char ()
 
 ; Optimized version of peek-char(nil nil nil nil)
 defun my-peek-char ()
-  ; declare $ optimize speed(3) safety(0)
+  declare $ optimize speed(3) safety(0)
   declare $ type fixnum mmbuffer-position mmbuffer-length
-  (declare ((simple-array (unsigned-byte 8)) mmbuffer))
+  declare simple-array(unsigned-byte(8))(mmbuffer)
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
@@ -219,7 +219,7 @@ defun process-metamath-file ()
   iter
     for tok next read-token()
     while tok
-    format t "~S~%" tok
+    ; format t "~S~%" tok
     ; Note - at this point "tok" is not null.
     ; TODO: Handle "begin with $" specially - error if not listed.
     cond

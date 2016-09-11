@@ -1,8 +1,14 @@
 #!/bin/sh
 
+if [ $# -gt 0 ] ; then
+  FILENAME="$1"
+else
+  FILENAME='demo0.mm'
+fi
+
 sbcl <<END
 (require :asdf)
 (asdf:load-system :cl-metamath)
-(cl-metamath:load-mmfile "demo0.mm")
+(cl-metamath:load-mmfile "$FILENAME")
 (cl-metamath:process-metamath-file)
 END
