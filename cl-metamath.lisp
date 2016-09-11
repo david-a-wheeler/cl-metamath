@@ -8,7 +8,7 @@
 ; Switch to sweet-expressions - from here on the code is more readable.
 (readable:enable-sweet)
 
-declaim $ optimize speed
+; declaim $ optimize speed
 
 ; import 'alexandria:define-constant
 
@@ -27,7 +27,7 @@ defun my-command-line ()
   '("demo0.mm")
 
 ; TODO: Find the routine to do this less hackishly; it's not *package*.
-defvar *self-package* find-package('metamath)
+defvar *self-package* find-package('cl-metamath)
 
 ; Extra code to *quickly* read files.
 
@@ -92,14 +92,11 @@ defun read-token ()
     if not(my-peek-char())
       nil
       iter
-         for c = my-peek-char() ; include whitespace
-         while {c and not(whitespace-char-p(c))}
-         ; collect (the character my-read-char()) into letters
-         vector-push-extend my-read-char() cur
-         finally
-           ; return
-             intern coerce(cur 'simple-string) *self-package*
-
+        for c = my-peek-char() ; include whitespace
+        while {c and not(whitespace-char-p(c))}
+        vector-push-extend my-read-char() cur
+        finally $ return
+          intern coerce(cur 'simple-string) *self-package*
 
 ; Skip characters within a "$(" comment.
 ; "$)" ends, but must be whitespace separated.
@@ -206,12 +203,13 @@ defun read-labelled (label)
       eq(tok '|$p|) read-p(label)
       t error("Unknown operation ~S after label ~S~%" tok label)
 
+defun do-nothing ()
+
 ; Read a metamath file from *standard-input*
 defun process-metamath-file ()
   ; declare $ optimize speed(3) safety(0)
   format t "process-metamath-file.~%"
   iter
-    ; declare $ type atom tok
     for tok next read-token()
     while tok
     ; Note - at this point "tok" is not null.
@@ -221,8 +219,8 @@ defun process-metamath-file ()
       eq(tok '|$c|) read-constant()
       eq(tok '|$d|) read-distinct()
       eq(tok '|$v|) read-variables()
-      eq(tok '|${|) nil ; TODO
-      eq(tok '|$}|) nil ; TODO
+      eq(tok '|${|) do-nothing() ; TODO
+      eq(tok '|$}|) do-nothing() ; TODO
       t read-labelled(tok)
 
 ; main entry for command line.

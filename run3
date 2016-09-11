@@ -3,4 +3,6 @@
 sbcl <<END
 (require :asdf)
 (asdf:load-system :cl-metamath)
+(cl-metamath:load-mmfile "demo0.mm")
+(cl-metamath:process-metamath-file)
 END
