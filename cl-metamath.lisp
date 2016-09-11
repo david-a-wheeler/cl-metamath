@@ -1,36 +1,19 @@
 ;;;; Implement metamath-related operations
 
-;;; Startup.
-;;; We assume we have the following working:
-;;; - ASDF (for loading packages on machine) / uiop (for basic I/O)
-;;; - Quicklisp (to download/manage external packages)
-
 ;;; This is designed to be high performance. We want the code to be clear,
 ;;; but some decisions make a big difference to performance.
 
-(cl:in-package #:cl-user)
-(declaim (optimize speed))
-
-; Load Libraries
-(require "asdf") ; For packages loading.  Includes uiop
-(quicklisp:quickload "readable" :silent t) ; Easy-to-read program notation
-(quicklisp:quickload "iterate" :silent t)  ; Improved iterator
-(quicklisp:quickload "alexandria" :silent t)  ; Improved iterator
-
-(defpackage #:metamath
-  (:use #:cl
-        #:iterate ; Improved iterator
-        #:uiop)   ; Part of ASDF
-  (:export #:main
-           #:load-mmfile
-           #:process-metamath-file))
-
-(cl:in-package #:metamath)
+(cl:in-package #:cl-metamath)
 
 ; Switch to sweet-expressions - from here on the code is more readable.
 (readable:enable-sweet)
 
-import 'alexandria:define-constant
+declaim $ optimize speed
+
+; import 'alexandria:define-constant
+
+defvar *author* "David A. Wheeler <dwheeler@dwheeler.com>"
+defvar *license* "MIT"
 
 ; TODO: where's the portable library for this?
 ;(defun my-command-line ()
@@ -44,7 +27,7 @@ defun my-command-line ()
   '("demo0.mm")
 
 ; TODO: Find the routine to do this less hackishly; it's not *package*.
-define-constant self-package find-package('metamath)
+defvar *self-package* find-package('metamath)
 
 ; Extra code to *quickly* read files.
 
@@ -70,21 +53,21 @@ defun my-read-char ()
 
 ; Optimized version of peek-char(nil nil nil nil)
 defun my-peek-char ()
-  declare $ optimize speed(3) safety(0)
+  ; declare $ optimize speed(3) safety(0)
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
       if {result > 127}
         error "Code point >127: ~S." result
         code-char result
-;
 
 ; Return "true" if c is whitespace character.
 declaim $ inline whitespace-char-p
 defun whitespace-char-p (c)
-  declare $ optimize speed(3) safety(0)
-  declare $ type character c
+  ; declare(optimize(speed(3) safety(0)))
+  ; declare(type character c)
   {char=(c #\space) or not(graphic-char-p(c))}
+
 
 declaim $ inline consume-whitespace
 defun consume-whitespace ()
@@ -102,7 +85,7 @@ defun consume-whitespace ()
 ; into *package*, but then we'd need to change the rest of the code so that
 ; comparisons with inline constants like '|$p| would work.
 defun read-token ()
-  declare $ optimize speed(3) safety(0)
+  ; declare $ optimize speed(3) safety(0)
   consume-whitespace()
   let
     $ cur make-array(20 :element-type 'character :fill-pointer 0 :adjustable t)
@@ -113,8 +96,9 @@ defun read-token ()
          while {c and not(whitespace-char-p(c))}
          ; collect (the character my-read-char()) into letters
          vector-push-extend my-read-char() cur
-         finally $ return
-           intern coerce(cur 'simple-string) self-package
+         finally
+           ; return
+             intern coerce(cur 'simple-string) *self-package*
 
 
 ; Skip characters within a "$(" comment.
@@ -224,10 +208,10 @@ defun read-labelled (label)
 
 ; Read a metamath file from *standard-input*
 defun process-metamath-file ()
-  declare $ optimize speed(3) safety(0)
+  ; declare $ optimize speed(3) safety(0)
   format t "process-metamath-file.~%"
   iter
-    declare $ type atom tok
+    ; declare $ type atom tok
     for tok next read-token()
     while tok
     ; Note - at this point "tok" is not null.

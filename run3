@@ -1,0 +1,6 @@
+#!/bin/sh
+
+sbcl <<END
+(require :asdf)
+(asdf:load-system :cl-metamath)
+END

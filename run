@@ -6,9 +6,9 @@ else
   FILENAME='demo0.mm'
 fi
 
-sbcl --load "metamath.lisp" \
-     --eval "(progn
-              (in-package :metamath)
-              (metamath:load-mmfile \"$FILENAME\")
-              (metamath:process-metamath-file))"
+sbcl --eval "(progn
+              (asdf:load-system :cl-metamath)
+              (in-package :cl-metamath)
+              (cl-metamath:load-mmfile \"$FILENAME\")
+              (cl-metamath:process-metamath-file))"
 

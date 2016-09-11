@@ -20,6 +20,7 @@ but some decisions make a big difference to performance.  Some tips:
 - http://www.cliki.net/performance (list of tips)
 - https://www.cs.utexas.edu/users/novak/lispeff.html (Gordon S. Novak Jr)
 - http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.150.640
+- https://common-lisp.net/project/cmucl/doc/cmu-user/compiler-hint.html
 - Inlining can sometimes harm performance, because of the limited
   number of registers available.  This is especially a
   a problem on x86 32-bit, because it only has 8 registers.
@@ -103,3 +104,5 @@ make
 make DESTDIR="$HOME" install
 cd ..
 ~~~~
+
+https://github.com/xach/quickproject
