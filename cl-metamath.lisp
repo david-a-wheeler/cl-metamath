@@ -93,6 +93,11 @@ defparameter *scopes* list(create-scope())
 defparameter *constants* make-hash-table(:test #'eq :size 4000)
 defparameter *variables* make-hash-table(:test #'eq :size 1000)
 
+defparameter *hypotheses* make-hash-table(:test #'eq)
+defparameter *assertions* make-hash-table(:test #'eq)
+
+defun label-used-p (label)
+  {gethash(label *hypotheses*) or gethash(label *assertions*)}
 
 ; Return "true" if c is whitespace character.
 declaim $ inline whitespace-char-p
@@ -176,7 +181,7 @@ declaim $ inline length1p
 defun length1p (list)
   {list and consp(list) and not(cdr(list))}
 
-; Read rest of $c statement
+; Read rest of $c statement, add to *constants*
 defun read-constant ()
   if not(length1p(*scopes*))
     error "$c statement incorrectly occurs in inner block"
@@ -191,9 +196,8 @@ defun read-constant ()
       error "Attempt to declare non-mathsymbol ~S as constant" token
     if gethash(token *variables*)
       error "Attempt to redeclare variable ~S as constant" token
-    ; TODO:
-    ; if token is label -> error "Attempt to reuse label ~S as constant"
-    ; if token is declared -> error "Attempt to redeclare ~S"
+    if label-used-p(token)
+      error "Attempt to reuse label ~S as constant" token
     let
       $ hash-entry gethash(token *constants*)
       if hash-entry
