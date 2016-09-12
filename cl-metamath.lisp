@@ -253,7 +253,6 @@ defun read-variables ()
         nil
 
 ; Read rest of $f
-; TODO: Really handle
 defun read-f (label)
   ; format t "Reading $f in label ~S~%" label
   let ((statement read-to-terminator('|$.|)))
@@ -265,12 +264,12 @@ defun read-f (label)
     if not(active-variable-p(second(statement)))
       error "Second symbol in $f statement ~S is ~S, which is not a variable"
         label \\ second(statement)
-    ; TODO: Create new floating hypothesis
+    ; Create new floating hypothesis
     ; Like hypotheses.insert(std::make_pair(label,std::make_pair(newhyp,true)))
     setf gethash(label *hypotheses*) list(statement t)
     ; Like scopes.back().activehyp.push_back(label);
     vector-push-extend label scope-active-hypotheses(first(*scopes*))
-    ; TODO: scopes.back().floatinghyp.insert(std::make_pair(variable, label));
+    ; Like scopes.back().floatinghyp.insert(std::make_pair(variable, label));
     setf
       gethash second(statement) scope-floating-hypotheses(first(*scopes*))
       label
@@ -292,7 +291,6 @@ defun read-expression (statement-type label terminator)
 ; Read rest of $e
 defun read-e (label)
   ; format t "Reading $e in label ~S~%" label
-  ; TODO: read-expression instead
   let ((expression read-expression(#\e label '|$.|)))
     ; Like hypotheses.insert(std::make_pair(label,std::make_pair(newhyp,false)))
     setf gethash(label *hypotheses*) list(expression nil)
