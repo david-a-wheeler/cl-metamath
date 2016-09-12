@@ -180,33 +180,29 @@ defun length1p (list)
 defun read-constant ()
   if not(length1p(*scopes*))
     error "$c statement incorrectly occurs in inner block"
-  let ((listempty t))
-    iter
-      for token = read-token-skip-comment()
-      if not(token)
-        error "Unterminated $c"
-      ; while not(eq(token (quote |$.|)))
-      while not(eq(token '|$.|))
-      setf listempty nil
-      if not(mathsymbolp(token))
-        error "Attempt to declare non-mathsymbol ~S as constant" token
-      if gethash(token *variables*)
-        error "Attempt to redeclare variable ~S as constant" token
-      ; TODO:
-      ; if token is label -> error "Attempt to reuse label ~S as constant"
-      ; if token is declared -> error "Attempt to redeclare ~S"
-      ; Add constant "token"
-      ; format t "DEBUG: Adding constant ~S~%" token
-      let
-        $ hash-entry gethash(token *constants*)
-        ; format t "  DEBUG - read-constant setting hash entry for ~S~%" token
-        if hash-entry
-          error "Constant redeclaration attempted for ~S~%" token
-          setf hash-entry t ; Set constant entry.
-      finally
-        if listempty
-          error "Empty $c list"
-          nil
+  iter
+    with listempty = t ; We'll assume empty list until shown otherwise
+    for token = read-token-skip-comment()
+    if not(token)
+      error "Unterminated $c"
+    while not(eq(token '|$.|))
+    setf listempty nil ; We see a non-"$."
+    if not(mathsymbolp(token))
+      error "Attempt to declare non-mathsymbol ~S as constant" token
+    if gethash(token *variables*)
+      error "Attempt to redeclare variable ~S as constant" token
+    ; TODO:
+    ; if token is label -> error "Attempt to reuse label ~S as constant"
+    ; if token is declared -> error "Attempt to redeclare ~S"
+    let
+      $ hash-entry gethash(token *constants*)
+      if hash-entry
+        error "Constant redeclaration attempted for ~S~%" token
+        setf hash-entry t ; Set constant entry.
+    finally
+      if listempty
+        error "Empty $c list"
+        nil
 
 ; Read rest of $d statement
 ; TODO: Really handle
