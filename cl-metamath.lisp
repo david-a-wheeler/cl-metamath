@@ -75,8 +75,8 @@ defun my-peek-char ()
 defstruct scope
   active-variables ; :type hash-table
   active-hypotheses ; :type vector
-  disjoint-variables ; :type hash-table
-  floating-hypotheses ; :type hash-table
+  disjoint-variables ; :type vector of hash-tables (each $d)
+  floating-hypotheses ; :type hash-table ; maps variable->label of typedef
 
 defun create-scope ()
   make-scope
@@ -91,7 +91,7 @@ defparameter *scopes* list(create-scope())
 defparameter *constants* make-hash-table(:test #'eq :size 4000)
 defparameter *variables* make-hash-table(:test #'eq :size 1000)
 
-defparameter *hypotheses* make-hash-table(:test #'eq)
+defparameter *hypotheses* make-hash-table(:test #'eq) ; label -> (stmt t)
 defparameter *assertions* make-hash-table(:test #'eq)
 
 defun label-used-p (label)
@@ -254,9 +254,25 @@ defun read-variables ()
 ; Read rest of $f
 ; TODO: Really handle
 defun read-f (label)
-  declare $ ignore label
   ; format t "Reading $f in label ~S~%" label
-  read-to-terminator (quote |$.|)
+  let ((statement read-to-terminator('|$.|)))
+    if {length(statement) /= 2}
+      error "Must have exactly two symbols in $f"
+    if not(gethash(first(statement) *constants*))
+      error "First symbol in $f statement ~S is ~S, which is not a constant"
+        label \\ first(statement)
+    if not(active-variable-p(second(statement)))
+      error "Second symbol in $f statement ~S is ~S, which is not a variable"
+        label \\ second(statement)
+    ; TODO: Create new floating hypothesis
+    ; Like hypotheses.insert(std::make_pair(label,std::make_pair(newhyp,true)))
+    setf gethash(label *hypotheses*) list(statement t)
+    ; Like scopes.back().activehyp.push_back(label);
+    vector-push-extend label scope-active-hypotheses(first(*scopes*))
+    ; TODO: scopes.back().floatinghyp.insert(std::make_pair(variable, label));
+    setf
+      gethash second(statement) scope-floating-hypotheses(first(*scopes*))
+      label
 
 ; Read rest of $e
 ; TODO: Really handle
@@ -293,6 +309,14 @@ defun read-labelled (label)
 
 defun do-nothing ()
 
+defun show-status ()
+  format t " Status:~%"
+  let ((*package* find-package('cl-metamath)))
+    format t "  *constants* = ~S~%" hash-table-keys(*constants*)
+    format t "  *variables* = ~S~%" hash-table-keys(*variables*)
+    format t "  *hypotheses* = ~S~%" hash-table-keys(*hypotheses*)
+    format t "  *assertions* = ~S~%" hash-table-keys(*assertions*)
+
 ; Read a metamath file from *standard-input*
 defun process-metamath-file ()
   ; declare $ optimize speed(3) safety(0)
@@ -310,9 +334,8 @@ defun process-metamath-file ()
       eq(tok '|${|) do-nothing() ; TODO
       eq(tok '|$}|) do-nothing() ; TODO
       t read-labelled(tok)
-  format t " DEBUG: Processing file complete.  Results:~%"
-  format t "  *constants* = ~S~%" hash-table-keys(*constants*)
-  format t "  *variables* = ~S~%" hash-table-keys(*variables*)
+  format t " DEBUG: Processing file complete.~%"
+  show-status()
 
 ; main entry for command line.
 defun main ()
