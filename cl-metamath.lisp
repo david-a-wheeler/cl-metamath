@@ -167,12 +167,18 @@ defun read-to-terminator (terminator)
 
 ; Return true if sym is a "math symbol" (does not contain "$")
 ; See Matamath book section 4.1.1.
+declaim $ inline mathsymbolp
 defun mathsymbolp (sym)
   not(find(#\$ symbol-name(sym)))
 
+; Return true if it's a list of length 1, trickier to be efficient.
+declaim $ inline length1p
+defun length1p (list)
+  {list and consp(list) and not(cdr(list))}
+
 ; Read rest of $c statement
 defun read-constant ()
-  if {not(*scopes*) or cdr(*scopes*)}
+  if not(length1p(*scopes*))
     error "$c statement incorrectly occurs in inner block"
   let ((listempty t))
     iter
