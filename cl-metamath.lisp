@@ -72,10 +72,10 @@ defun my-peek-char ()
 
 
 
-defstruct scope
-  active-variables ; :type hash-table
-  active-hypotheses ; :type vector
-  disjoint-variables ; :type vector of hash-tables (each $d)
+defstruct scope ; The data stored in a single scope
+  active-variables ; :type hash-table ; t if active
+  active-hypotheses ; :type vector of list(label is-$f)
+  disjoint-variables ; :type vector of hash-tables ; each $d
   floating-hypotheses ; :type hash-table ; maps variable->label of typedef
 
 defun create-scope ()
@@ -90,15 +90,17 @@ defparameter *scopes* list(create-scope())
 
 defparameter *constants* make-hash-table(:test #'eq :size 4000)
 defparameter *variables* make-hash-table(:test #'eq :size 1000)
-
-defparameter *hypotheses* make-hash-table(:test #'eq) ; label -> (stmt t)
+defparameter *hypotheses* make-hash-table(:test #'eq) ; label -> (stmt is-$f)
 defparameter *assertions* make-hash-table(:test #'eq)
 
 defun label-used-p (label)
   {gethash(label *hypotheses*) or gethash(label *assertions*)}
 
+defun get-floating-hyp (hyp)
+  some (lambda (scope) gethash(hyp (scope-floating-hypotheses scope))) *scopes*
+
 defun active-variable-p (token)
-  some (lambda (x) gethash(token (scope-active-variables x))) *scopes*
+  some (lambda (scope) gethash(token (scope-active-variables scope))) *scopes*
 
 ; Return "true" if c is whitespace character.
 declaim $ inline whitespace-char-p
@@ -118,7 +120,7 @@ defun consume-whitespace ()
 
 ; Skip characters within a "$(" comment.
 ; "$)" ends, but must be whitespace separated.
-; TODO: Handle embedded x$) correctly.
+; TODO: Handle embedded x$) correctly; perhaps last line consume-non-whitespace
 defun read-comment ()
   declare $ optimize speed(3) safety(0)
   iter
@@ -161,14 +163,13 @@ defun read-token-skip-comment ()
     return token
 
 ; Read tokens until terminator, return list of tokens
-; TODO: This is for stubbing out parsing.
 defun read-to-terminator (terminator)
   iter
-     for token = read-token-skip-comment()
-     if not(token)
-       error "Early termination without ~S~%" terminator
-     while not(eq(token terminator))
-     collect token
+    for token = read-token-skip-comment()
+    if not(token)
+      error "Early termination without ~S~%" terminator
+    while not(eq(token terminator))
+    collect token
 
 ; Return true if sym is a "math symbol" (does not contain "$")
 ; See Matamath book section 4.1.1.
@@ -274,12 +275,28 @@ defun read-f (label)
       gethash second(statement) scope-floating-hypotheses(first(*scopes*))
       label
 
+defun read-expression (statement-type label terminator)
+  let ((expression read-to-terminator(terminator)))
+    if null(expression)
+      error "Unfinished $~c statement ~S" statement-type label
+    if not(gethash(first(expression) *constants*))
+      error "First symbol in $~c statement ~S is ~S which is not a constant"
+        statement-type \\ label \\ first(expression)
+    iter
+      for sym in expression
+      if {not(gethash(sym *constants*)) and not(get-floating-hyp(sym))}
+        error "In $~c statement ~S, token ~S is not constant or variable in $f"
+          statement-type \\ label \\ sym
+    expression ; return the expression (as a list)
+
 ; Read rest of $e
-; TODO: Really handle
 defun read-e (label)
-  declare $ ignore label
   ; format t "Reading $e in label ~S~%" label
-  read-to-terminator (quote |$.|)
+  ; TODO: read-expression instead
+  let ((expression read-expression(#\e label '|$.|)))
+    ; Like hypotheses.insert(std::make_pair(label,std::make_pair(newhyp,false)))
+    setf gethash(label *hypotheses*) list(expression nil)
+    vector-push-extend label scope-active-hypotheses(first(*scopes*))
 
 ; Read rest of $a
 ; TODO: Really handle
@@ -296,7 +313,6 @@ defun read-p (label)
   read-to-terminator (quote |$.|)
 
 ; Read statement labelled "label".
-; TODO: Really handle
 defun read-labelled (label)
   if-let (token read-token())
     cond
@@ -322,18 +338,21 @@ defun process-metamath-file ()
   ; declare $ optimize speed(3) safety(0)
   format t "process-metamath-file.~%"
   iter
-    for tok next read-token()
-    while tok
-    ; Note - at this point "tok" is not null.
+    for token next read-token()
+    while token
+    ; Note - at this point "token" is not null.
     ; TODO: Handle "begin with $" specially - error if not listed.
     cond
-      eq(tok '|$(|) read-comment()
-      eq(tok '|$c|) read-constants()
-      eq(tok '|$d|) read-disjoint()
-      eq(tok '|$v|) read-variables()
-      eq(tok '|${|) do-nothing() ; TODO
-      eq(tok '|$}|) do-nothing() ; TODO
-      t read-labelled(tok)
+      eq(token '|$(|) read-comment()
+      eq(token '|$c|) read-constants()
+      eq(token '|$d|) read-disjoint()
+      eq(token '|$v|) read-variables()
+      eq(token '|${|) do-nothing() setq(*scopes* cons(create-scope() *scopes*))
+      eq(token '|$}|) do-nothing()
+        setq *scopes* rest(*scopes*)
+        if null(*scopes*)
+          error "$} without corresponding ${"
+      t read-labelled(token)
   format t " DEBUG: Processing file complete.~%"
   show-status()
 
