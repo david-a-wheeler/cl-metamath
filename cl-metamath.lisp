@@ -11,7 +11,7 @@
 ; Switch to sweet-expressions - from here on the code is more readable.
 (readable:enable-sweet)
 
-declaim $ optimize speed
+; declaim $ optimize speed
 
 defvar *author* "David A. Wheeler <dwheeler@dwheeler.com>"
 defvar *license* "MIT"
@@ -69,8 +69,13 @@ defun my-peek-char ()
         error "Code point >127: ~S." result
         code-char result
 
-
-
+defstruct assertion ; The data stored about one assertion (axiom or theorem)
+  hypotheses ; array
+  disjoint-variables ; set of pairs
+  expression ; sequence (currently list)
+  ; variables ; variables used (as hash).  Stored so we can parallelize?
+  ;  - won't work, lookups of hypotheses, etc., will also go through
+  ;  mutating hash tables.  Just read, then parallel check.
 
 defstruct scope ; The data stored in a single scope
   active-variables ; :type hash-table ; t if active
@@ -91,7 +96,7 @@ defparameter *scopes* list(create-scope())
 defparameter *constants* make-hash-table(:test #'eq :size 4000)
 defparameter *variables* make-hash-table(:test #'eq :size 1000)
 defparameter *hypotheses* make-hash-table(:test #'eq) ; label -> (stmt is-$f)
-defparameter *assertions* make-hash-table(:test #'eq)
+defparameter *assertions* make-hash-table(:test #'eq) ; label -> assertion
 
 defun label-used-p (label)
   {gethash(label *hypotheses*) or gethash(label *assertions*)}
@@ -181,6 +186,58 @@ defun mathsymbolp (sym)
 declaim $ inline length1p
 defun length1p (list)
   {list and consp(list) and not(cdr(list))}
+
+declaim $ inline mmvariablep
+defun mmvariablep (symbol) ; Return true-value if symbol is an mm variable.
+  gethash(symbol *variables*)
+
+defun variables-in (expression)
+  remove-if-not #'mmvariablep expression
+
+defun hash-table-t-from-list (old-list) ; Create hash table with "t" values
+  let ((new-table make-hash-table(:test #'eq)))
+    iter
+      for x from old-list
+      setf gethash(x new-table) t
+
+; Insert into array.  *Modifies* vector.
+defun insert-into-array (vector value position)
+  replace(vector vector :start2 position :start1 1+(position)
+           :end2 vector-push-extend(value vector))
+  setf (aref vector position) value
+  vector
+
+defun calculate-disjoint-variables (vars-used)
+  declare $ ignore vars-used
+  nil ; TODO. ~Line 380
+
+defun construct-assertion (label expression)
+  ; TODO
+  declare $ ignore label
+  declare $ ignore expression
+  nil
+;  let*
+;    \\
+;      new-assertion
+;        make-assertion
+;          :hypotheses \\ make-array(10 :fill-pointer 0 :adjustable t)
+;          :disjoint-variables \\ nil ; \\ make-hash-table(:test #'equal)
+;          :expression \\ expression
+;      vars-used
+;        hash-table-t-from-list(variables-in(expression))
+;    ; Put active hypotheses in right order, and note vars-used if essential.
+;    iter (for scope in *scopes*)
+;      iter (for hyp in reverse(scope-active-hypotheses(scope)))
+;        cond
+;          {second(hyp) and gethash(first(hyp) vars-used)} ; Mandatory floating?
+;            insert-into-array assertion-hypotheses(new-assertion) hyp 0
+;          not(second(hyp)) ; Essential hypothesis?
+;            insert-into-array assertion-hypotheses(new-assertion) hyp 0
+;            iter (for sym in first(hyp))
+;              if mmvariablep(sym)
+;                setf gethash(sym vars-used) t
+;    setf assertion-disjoint-variables(new-assertion)
+;      calculate-disjoint-variables(vars-used)
 
 ; Read rest of $c statement, add to *constants*
 defun read-constants ()
@@ -299,9 +356,9 @@ defun read-e (label)
 ; Read rest of $a
 ; TODO: Really handle
 defun read-a (label)
-  declare $ ignore label
   ; format t "Reading $a in label ~S~%" label
-  read-to-terminator (quote |$.|)
+  let ((expression read-expression(#\a label '|$.|)))
+    construct-assertion label expression
 
 ; Read rest of $p
 ; TODO: Really handle
