@@ -13,8 +13,6 @@
 
 declaim $ optimize speed
 
-; import 'alexandria:define-constant
-
 defvar *author* "David A. Wheeler <dwheeler@dwheeler.com>"
 defvar *license* "MIT"
 
@@ -198,11 +196,9 @@ defun read-constant ()
       error "Attempt to redeclare variable ~S as constant" token
     if label-used-p(token)
       error "Attempt to reuse label ~S as constant" token
-    let
-      $ hash-entry gethash(token *constants*)
-      if hash-entry
-        error "Constant redeclaration attempted for ~S~%" token
-        setf hash-entry t ; Set constant entry.
+    if-let (hash-entry gethash(token *constants*))
+      error "Constant redeclaration attempted for ~S~%" token
+      setf hash-entry t ; Set constant entry.
     finally
       if listempty
         error "Empty $c list"
