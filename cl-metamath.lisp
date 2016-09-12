@@ -82,7 +82,7 @@ defun create-scope ()
   make-scope
     :active-variables \\ make-hash-table(:test #'eq)
     :active-hypotheses \\ make-array(10 :fill-pointer 0 :adjustable t)
-    :disjoint-variables \\ make-hash-table(:test #'eq)
+    :disjoint-variables \\ make-array(10 :fill-pointer 0 :adjustable t)
     :floating-hypotheses \\ make-hash-table(:test #'eq)
 
 ; list of currently-active scopes; first is deepest-nested scope
@@ -164,11 +164,10 @@ defun read-token-skip-comment ()
 ; TODO: This is for stubbing out parsing.
 defun read-to-terminator (terminator)
   iter
-     for token = read-token()
-     while {token and not(eq(token terminator))}
-     when eq(token '|$(|)
-       read-comment()
-       next-iteration()
+     for token = read-token-skip-comment()
+     if not(token)
+       error "Early termination without ~S~%" terminator
+     while not(eq(token terminator))
      collect token
 
 ; Return true if sym is a "math symbol" (does not contain "$")
@@ -183,7 +182,7 @@ defun length1p (list)
   {list and consp(list) and not(cdr(list))}
 
 ; Read rest of $c statement, add to *constants*
-defun read-constant ()
+defun read-constants ()
   if not(length1p(*scopes*))
     error "$c statement incorrectly occurs in inner block"
   iter
@@ -208,10 +207,24 @@ defun read-constant ()
         nil
 
 ; Read rest of $d statement
-; TODO: Really handle
-defun read-distinct ()
-  ; format t "Reading distinct~%"
-  read-to-terminator (quote |$.|)
+defun read-disjoint ()
+  ; format t "Reading disjoint~%"
+  iter
+    with disjoint-variables = make-hash-table()
+    for token = read-token-skip-comment()
+    if not(token)
+      error "Unterminated $d"
+    while not(eq(token '|$.|))
+    if not(active-variable-p(token))
+      error "Token ~S is not an active variable, but in $d statement" token
+    if gethash(token disjoint-variables)
+      error "$d statement mentions ~S twice" token
+      setf gethash(token disjoint-variables) t
+    finally
+      if {hash-table-count(disjoint-variables) < 2}
+        error "Not enough items in $d statement"
+        vector-push-extend disjoint-variables
+          scope-disjoint-variables(first(*scopes*))
 
 ; Read rest of $v statement
 defun read-variables ()
@@ -291,8 +304,8 @@ defun process-metamath-file ()
     ; TODO: Handle "begin with $" specially - error if not listed.
     cond
       eq(tok '|$(|) read-comment()
-      eq(tok '|$c|) read-constant()
-      eq(tok '|$d|) read-distinct()
+      eq(tok '|$c|) read-constants()
+      eq(tok '|$d|) read-disjoint()
       eq(tok '|$v|) read-variables()
       eq(tok '|${|) do-nothing() ; TODO
       eq(tok '|$}|) do-nothing() ; TODO
