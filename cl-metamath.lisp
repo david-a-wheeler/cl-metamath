@@ -97,6 +97,9 @@ defparameter *assertions* make-hash-table(:test #'eq)
 defun label-used-p (label)
   {gethash(label *hypotheses*) or gethash(label *assertions*)}
 
+defun active-variable-p (token)
+  some (lambda (x) gethash(token (scope-active-variables x))) *scopes*
+
 ; Return "true" if c is whitespace character.
 declaim $ inline whitespace-char-p
 defun whitespace-char-p (c)
@@ -225,10 +228,11 @@ defun read-variables ()
       error "Attempt to redeclare constant ~S as a variable" token
     if label-used-p(token)
       error "Attempt to reuse label ~S as a variable" token
-    if gethash(token *variables*)
+    if active-variable-p(token)
       error "Variable redeclaration attempted for ~S~%" token
-      setf gethash(token *variables*) t
-    ; TODO: We don't currently try to handle variables defined inside a scope.
+      progn
+        setf gethash(token *variables*) t
+        setf gethash(token (scope-active-variables first(*scopes*))) t
     finally
       if listempty
         error "Empty $v list"
@@ -294,8 +298,8 @@ defun process-metamath-file ()
       eq(tok '|$}|) do-nothing() ; TODO
       t read-labelled(tok)
   format t " DEBUG: Processing file complete.  Results:~%"
-  format t "  *constants* = ~S~%" hash-table-plist(*constants*)
-  format t "  *variables* = ~S~%" hash-table-plist(*variables*)
+  format t "  *constants* = ~S~%" hash-table-keys(*constants*)
+  format t "  *variables* = ~S~%" hash-table-keys(*variables*)
 
 ; main entry for command line.
 defun main ()
