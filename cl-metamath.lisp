@@ -247,15 +247,14 @@ defun read-p (label)
 ; Read statement labelled "label".
 ; TODO: Really handle
 defun read-labelled (label)
-  let ((tok read-token()))
-    if not(tok)
-      error "Cannot end on label"
+  if-let (token read-token())
     cond
-      eq(tok '|$f|) read-f(label)
-      eq(tok '|$e|) read-e(label)
-      eq(tok '|$a|) read-a(label)
-      eq(tok '|$p|) read-p(label)
-      t error("Unknown operation ~S after label ~S~%" tok label)
+      eq(token '|$f|) read-f(label)
+      eq(token '|$e|) read-e(label)
+      eq(token '|$a|) read-a(label)
+      eq(token '|$p|) read-p(label)
+      t error("Unknown operation ~S after label ~S~%" token label)
+    error "Cannot end on label"
 
 defun do-nothing ()
 
