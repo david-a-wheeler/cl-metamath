@@ -196,9 +196,9 @@ defun read-constant ()
       error "Attempt to redeclare variable ~S as constant" token
     if label-used-p(token)
       error "Attempt to reuse label ~S as constant" token
-    if-let (hash-entry gethash(token *constants*))
+    if gethash(token *constants*)
       error "Constant redeclaration attempted for ~S~%" token
-      setf hash-entry t ; Set constant entry.
+      setf gethash(token *constants*) t ; Set constant entry.
     finally
       if listempty
         error "Empty $c list"
@@ -211,10 +211,28 @@ defun read-distinct ()
   read-to-terminator (quote |$.|)
 
 ; Read rest of $v statement
-; TODO: Really handle
 defun read-variables ()
-  ; format t "Reading variables~%"
-  read-to-terminator (quote |$.|)
+  iter
+    with listempty = t ; We'll assume empty list until shown otherwise
+    for token = read-token-skip-comment()
+    if not(token)
+      error "Unterminated $v"
+    while not(eq(token '|$.|))
+    setf listempty nil ; We see a non-"$."
+    if not(mathsymbolp(token))
+      error "Attempt to declare non-mathsymbol ~S as a variable" token
+    if gethash(token *constants*)
+      error "Attempt to redeclare constant ~S as a variable" token
+    if label-used-p(token)
+      error "Attempt to reuse label ~S as a variable" token
+    if gethash(token *variables*)
+      error "Variable redeclaration attempted for ~S~%" token
+      setf gethash(token *variables*) t
+    ; TODO: We don't currently try to handle variables defined inside a scope.
+    finally
+      if listempty
+        error "Empty $v list"
+        nil
 
 ; Read rest of $f
 ; TODO: Really handle
@@ -275,6 +293,9 @@ defun process-metamath-file ()
       eq(tok '|${|) do-nothing() ; TODO
       eq(tok '|$}|) do-nothing() ; TODO
       t read-labelled(tok)
+  format t " DEBUG: Processing file complete.  Results:~%"
+  format t "  *constants* = ~S~%" hash-table-plist(*constants*)
+  format t "  *variables* = ~S~%" hash-table-plist(*variables*)
 
 ; main entry for command line.
 defun main ()
