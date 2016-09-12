@@ -30,7 +30,7 @@ defun my-command-line ()
   '("demo0.mm")
 
 ; TODO: Find the routine to do this less hackishly; it's not *package*.
-defvar *self-package* find-package('cl-metamath)
+defparameter *self-package* find-package('cl-metamath)
 
 ; Extra code to *quickly* read files.
 
@@ -82,16 +82,16 @@ defstruct scope
 
 defun create-scope ()
   make-scope
-    :active-variables \\ make-hash-table()
+    :active-variables \\ make-hash-table(:test #'eq)
     :active-hypotheses \\ make-array(10 :fill-pointer 0 :adjustable t)
-    :disjoint-variables \\ make-hash-table()
-    :floating-hypotheses \\ make-hash-table()
+    :disjoint-variables \\ make-hash-table(:test #'eq)
+    :floating-hypotheses \\ make-hash-table(:test #'eq)
 
 ; list of currently-active scopes; first is deepest-nested scope
-defvar *scopes*
+defparameter *scopes* list(create-scope())
 
-
-
+defparameter *constants* make-hash-table(:test #'eq :size 4000)
+defparameter *variables* make-hash-table(:test #'eq :size 1000)
 
 
 ; Return "true" if c is whitespace character.
@@ -109,6 +109,20 @@ defun consume-whitespace ()
      for c = my-peek-char()
      while {c and whitespace-char-p(c)}
      my-read-char()
+
+; Skip characters within a "$(" comment.
+; "$)" ends, but must be whitespace separated.
+; TODO: Handle embedded x$) correctly.
+defun read-comment ()
+  declare $ optimize speed(3) safety(0)
+  iter
+    consume-whitespace
+    for c = my-peek-char()
+    if not(c)
+      error "Unterminated comment"
+    if eq(c #\$)
+      if eq(read-token() '|$)|) finish()
+      my-read-char()
 
 ; Read a whitespace-terminated token; returns it as a symbol. EOF returns nil.
 ; This first skips any leading whitespace.
@@ -131,57 +145,62 @@ defun read-token ()
         finally $ return
           intern coerce(cur 'simple-string) *self-package*
 
-; Skip characters within a "$(" comment.
-; "$)" ends, but must be whitespace separated.
-; TODO: Detect unterminated comment.
-defun read-comment ()
-  declare $ optimize speed(3) safety(0)
+; Read a token, but skip $(...$)
+defun read-token-skip-comment ()
   iter
-     consume-whitespace
-     for c = my-peek-char()
-     while c
-     if eq(c #\$)
-       if eq(read-token() '|$)|) finish()
-       my-read-char()
+    for token = read-token()
+    when eq(token '|$(|)
+      read-comment()
+      next-iteration()
+    return token
 
-; Read tokens until terminator.
+; Read tokens until terminator, return list of tokens
 ; TODO: This is for stubbing out parsing.
 defun read-to-terminator (terminator)
   iter
-     for tok = read-token()
-     while {tok and not(eq(tok terminator))}
-     cond
-       eq(tok '|$(|)
-         read-comment()
-         next-iteration()
-     collect tok
+     for token = read-token()
+     while {token and not(eq(token terminator))}
+     when eq(token '|$(|)
+       read-comment()
+       next-iteration()
+     collect token
+
+; Return true if sym is a "math symbol" (does not contain "$")
+; See Matamath book section 4.1.1.
+defun mathsymbolp (sym)
+  not(find(#\$ symbol-name(sym)))
 
 ; Read rest of $c statement
 defun read-constant ()
-  if {length(*scopes*) > 1}
+  if {not(*scopes*) or cdr(*scopes*)}
     error "$c statement incorrectly occurs in inner block"
   let ((listempty t))
     iter
-       for tok = read-token()
-       if not(tok)
-         error "Unterminated $c"
-       while not(eq(tok (quote |$.|)))
-       cond ; Are comments allowed *inside* $c?  Presumably yes..
-         eq(tok '|$(|)
-           read-comment()
-           next-iteration()
-       setf listempty nil
-       ; TODO:
-       ; if tok is mathsymbol -> error "Attempt to declare ~S as constant"
-       ; if tok variable -> error "Attempt to redeclare variable ~S as constant"
-       ; if tok is label -> error "Attempt to reuse label ~S as constant"
-       ; if tok is declared -> error "Attempt to redeclare ~S"
-       ; Add constant "tok"
-       ; format t "DEBUG: Adding constant ~S~%" tok
-       finally
-         if listempty
-           error "Empty $c list"
-           nil
+      for token = read-token-skip-comment()
+      if not(token)
+        error "Unterminated $c"
+      ; while not(eq(token (quote |$.|)))
+      while not(eq(token '|$.|))
+      setf listempty nil
+      if not(mathsymbolp(token))
+        error "Attempt to declare non-mathsymbol ~S as constant" token
+      if gethash(token *variables*)
+        error "Attempt to redeclare variable ~S as constant" token
+      ; TODO:
+      ; if token is label -> error "Attempt to reuse label ~S as constant"
+      ; if token is declared -> error "Attempt to redeclare ~S"
+      ; Add constant "token"
+      ; format t "DEBUG: Adding constant ~S~%" token
+      let
+        $ hash-entry gethash(token *constants*)
+        ; format t "  DEBUG - read-constant setting hash entry for ~S~%" token
+        if hash-entry
+          error "Constant redeclaration attempted for ~S~%" token
+          setf hash-entry t ; Set constant entry.
+      finally
+        if listempty
+          error "Empty $c list"
+          nil
 
 ; Read rest of $d statement
 ; TODO: Really handle
@@ -242,11 +261,9 @@ defun do-nothing ()
 defun process-metamath-file ()
   ; declare $ optimize speed(3) safety(0)
   format t "process-metamath-file.~%"
-  setq *scopes* list(create-scope()) ; TODO: Move out to separate init
   iter
     for tok next read-token()
     while tok
-    ; format t "~S~%" tok
     ; Note - at this point "tok" is not null.
     ; TODO: Handle "begin with $" specially - error if not listed.
     cond
