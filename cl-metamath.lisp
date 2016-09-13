@@ -24,6 +24,12 @@ defvar *license* "MIT"
 ;   #+CMU extensions:*command-line-words*
 ;   nil))
 
+defmacro defun-inline (name parameters &body body)
+  "Define an inline function"
+  ` declaim $ inline ,name
+  ` defun ,name ,parameters
+      ,@body
+
 defun my-command-line ()
   '("demo0.mm")
 
@@ -79,7 +85,7 @@ defstruct assertion ; The data stored about one assertion (axiom or theorem)
 
 defstruct scope ; The data stored in a single scope
   active-variables ; :type hash-table ; t if active
-  active-hypotheses ; :type vector of list(label is-$f)
+  active-hypotheses ; :type vector of symbols ; labels
   disjoint-variables ; :type vector of hash-tables ; each $d
   floating-hypotheses ; :type hash-table ; maps variable->label of typedef
 
@@ -108,15 +114,13 @@ defun active-variable-p (token)
   some (lambda (scope) gethash(token (scope-active-variables scope))) *scopes*
 
 ; Return "true" if c is whitespace character.
-declaim $ inline whitespace-char-p
-defun whitespace-char-p (c)
+defun-inline whitespace-char-p (c)
   ; declare(optimize(speed(3) safety(0)))
   ; declare(type character c)
   {char=(c #\space) or not(graphic-char-p(c))}
 
 
-declaim $ inline consume-whitespace
-defun consume-whitespace ()
+defun-inline consume-whitespace ()
   declare $ optimize speed(3) safety(0)
   iter
      for c = my-peek-char()
@@ -178,26 +182,22 @@ defun read-to-terminator (terminator)
 
 ; Return true if sym is a "math symbol" (does not contain "$")
 ; See Matamath book section 4.1.1.
-declaim $ inline mathsymbolp
-defun mathsymbolp (sym)
+defun-inline mathsymbolp (sym)
   not(find(#\$ symbol-name(sym)))
 
 ; Return true if it's a list of length 1, trickier to be efficient.
-declaim $ inline length1p
-defun length1p (list)
+defun-inline length1p (list)
   {list and consp(list) and not(cdr(list))}
 
-declaim $ inline mmvariablep
-defun mmvariablep (symbol) ; Return true-value if symbol is an mm variable.
+defun-inline mmvariablep (symbol) ; Return true-value if symbol is mm variable
   gethash(symbol *variables*)
 
-defun variables-in (expression)
+defun-inline variables-in (expression)
   remove-if-not #'mmvariablep expression
 
 defun hash-table-t-from-list (old-list) ; Create hash table with "t" values
   let ((new-table make-hash-table(:test #'eq)))
-    iter
-      for x from old-list
+    dolist (x old-list new-table)
       setf gethash(x new-table) t
 
 ; Insert into array.  *Modifies* vector.
@@ -212,32 +212,34 @@ defun calculate-disjoint-variables (vars-used)
   nil ; TODO. ~Line 380
 
 defun construct-assertion (label expression)
-  ; TODO
-  declare $ ignore label
-  declare $ ignore expression
-  nil
-;  let*
-;    \\
-;      new-assertion
-;        make-assertion
-;          :hypotheses \\ make-array(10 :fill-pointer 0 :adjustable t)
-;          :disjoint-variables \\ nil ; \\ make-hash-table(:test #'equal)
-;          :expression \\ expression
-;      vars-used
-;        hash-table-t-from-list(variables-in(expression))
-;    ; Put active hypotheses in right order, and note vars-used if essential.
-;    iter (for scope in *scopes*)
-;      iter (for hyp in reverse(scope-active-hypotheses(scope)))
-;        cond
-;          {second(hyp) and gethash(first(hyp) vars-used)} ; Mandatory floating?
-;            insert-into-array assertion-hypotheses(new-assertion) hyp 0
-;          not(second(hyp)) ; Essential hypothesis?
-;            insert-into-array assertion-hypotheses(new-assertion) hyp 0
-;            iter (for sym in first(hyp))
-;              if mmvariablep(sym)
-;                setf gethash(sym vars-used) t
-;    setf assertion-disjoint-variables(new-assertion)
-;      calculate-disjoint-variables(vars-used)
+  format t "DEBUG construct-assertion expression=~S~%" expression
+  let*
+    \\
+      new-assertion
+        make-assertion
+          :hypotheses \\ make-array(10 :fill-pointer 0 :adjustable t)
+          :disjoint-variables \\ nil ; \\ make-hash-table(:test #'equal)
+          :expression \\ expression
+      vars-used ; We could store this in an assertion slot if we wanted to
+        hash-table-t-from-list(variables-in(expression))
+    ; Put active hypotheses in right order, and note vars-used if essential.
+    iter (for scope in *scopes*)
+      iter (for hyp-name in-sequence reverse(scope-active-hypotheses(scope)))
+        let ((hyp gethash(hyp-name *hypotheses*))) ; hyp=(name,is-floating)
+          ; format t " DEBUG hyp-name=~S~%" hyp-name
+          ; format t " DEBUG lookup=~S~%" hyp
+          cond
+            {second(hyp) and gethash(first(hyp) vars-used)} ; Mandatory floating
+              insert-into-array assertion-hypotheses(new-assertion) hyp 0
+            not(second(hyp)) ; Essential hypothesis
+              insert-into-array assertion-hypotheses(new-assertion) hyp 0
+              iter (for sym in first(hyp))
+                if mmvariablep(sym)
+                  setf gethash(sym vars-used) t
+    setf assertion-disjoint-variables(new-assertion)
+      calculate-disjoint-variables(vars-used)
+    setf gethash(label *assertions*) new-assertion ; Add to set of assertions
+    new-assertion
 
 ; Read rest of $c statement, add to *constants*
 defun read-constants ()
@@ -345,6 +347,32 @@ defun read-expression (statement-type label terminator)
           statement-type \\ label \\ sym
     expression ; return the expression (as a list)
 
+defun read-compressed-proof (label assertion)
+  ; TODO
+  declare $ ignore label assertion
+  read-to-terminator('|$.|)
+
+defun read-uncompressed-proof (label assertion first-token)
+  ; TODO
+  declare $ ignore label assertion
+  read-to-terminator('|$.|)
+
+; Read rest of $p
+; TODO: Really handle
+defun read-p (label)
+  ; format t "Reading $p in label ~S~%" label
+  let*
+    \\
+       new-theorem read-to-terminator('|$=|)
+       assertion construct-assertion(label new-theorem)
+       next-token read-token-skip-comment()
+    if null(new-theorem)
+      error "Empty theorem statement ~S" label
+    case next-token
+      \( read-compressed-proof(label assertion)
+      nil error("Unfinished $p statement ~S" label)
+      t read-uncompressed-proof(label assertion next-token)
+
 ; Read rest of $e
 defun read-e (label)
   ; format t "Reading $e in label ~S~%" label
@@ -354,18 +382,10 @@ defun read-e (label)
     vector-push-extend label scope-active-hypotheses(first(*scopes*))
 
 ; Read rest of $a
-; TODO: Really handle
 defun read-a (label)
   ; format t "Reading $a in label ~S~%" label
   let ((expression read-expression(#\a label '|$.|)))
     construct-assertion label expression
-
-; Read rest of $p
-; TODO: Really handle
-defun read-p (label)
-  declare $ ignore label
-  ; format t "Reading $p in label ~S~%" label
-  read-to-terminator (quote |$.|)
 
 ; Read statement labelled "label".
 defun read-labelled (label)
@@ -383,10 +403,10 @@ defun do-nothing ()
 defun show-status ()
   format t " Status:~%"
   let ((*package* find-package('cl-metamath)))
-    format t "  *constants* = ~S~%" hash-table-keys(*constants*)
-    format t "  *variables* = ~S~%" hash-table-keys(*variables*)
-    format t "  *hypotheses* = ~S~%" hash-table-keys(*hypotheses*)
-    format t "  *assertions* = ~S~%" hash-table-keys(*assertions*)
+    format t "  *constants* = ~{~A~^ ~}~%" hash-table-keys(*constants*)
+    format t "  *variables* = ~{~A~^ ~}~%" hash-table-keys(*variables*)
+    format t "  *hypotheses* = ~{~A~^ ~}~%" hash-table-keys(*hypotheses*)
+    format t "  *assertions* = ~{~A~^ ~}~%" hash-table-keys(*assertions*)
 
 ; Read a metamath file from *standard-input*
 defun process-metamath-file ()
