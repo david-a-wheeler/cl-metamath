@@ -212,7 +212,7 @@ defun calculate-disjoint-variables (vars-used)
   nil ; TODO. ~Line 380
 
 defun construct-assertion (label expression)
-  format t "DEBUG construct-assertion expression=~S~%" expression
+  ; format t "DEBUG construct-assertion expression=~S~%" expression
   let*
     \\
       new-assertion
@@ -405,8 +405,8 @@ defun show-status ()
   let ((*package* find-package('cl-metamath)))
     format t "  *constants* = ~{~A~^ ~}~%" hash-table-keys(*constants*)
     format t "  *variables* = ~{~A~^ ~}~%" hash-table-keys(*variables*)
-    format t "  *hypotheses* = ~{~A~^ ~}~%" hash-table-keys(*hypotheses*)
-    format t "  *assertions* = ~{~A~^ ~}~%" hash-table-keys(*assertions*)
+    ; format t "  *hypotheses* = ~{~A~^ ~}~%" hash-table-keys(*hypotheses*)
+    ; format t "  *assertions* = ~{~A~^ ~}~%" hash-table-keys(*assertions*)
 
 ; Read a metamath file from *standard-input*
 defun process-metamath-file ()
