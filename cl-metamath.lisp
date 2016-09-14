@@ -213,10 +213,32 @@ defun insert-into-array (vector value position)
   vector
 
 defun verify-assertion-ref (label step stack)
-  let ((assertion gethash(step *assertions*)))
-    if {length(stack) < length(assertion-hypotheses(assertion))}
+  "Verify step given stack; modifies stack"
+  let*
+    \\
+      assertion gethash(step *assertions*)
+      num-assertion-hypotheses length(assertion-hypotheses(assertion))
+      base {length(stack) - num-assertion-hypotheses}
+      ; TODO: define
+      ; substitutions make-hash-table(:test #'eq) ; variable->expression
+    if {base < 0}
       error "In proof of theorem ~A step ~A stack too short" label step
     ; TODO !!!
+    iter (for i from 0 below num-assertion-hypotheses)
+      let
+        $ hypothesis
+          gethash(elt(assertion-hypotheses(assertion) i) *hypotheses*)
+        if second(hypothesis) ; floating?
+          progn ; Floating hypothesis
+            if not(eq(first(hypothesis) elt(elt(stack {base + i}) 0)))
+              error "In proof of theorem ~A unification failed - type" label
+            ; TODO: substitution
+          progn ; Essential hypothesis
+            ; TODO
+            do-nothing()
+    ; TODO: Remove hypothesis from stack
+    ; TODO: Verify disjoint variable conditions
+    ; TODO: Done verification of this step; insert new statement onto stack
   nil
 
 defun verify-proof (label)
