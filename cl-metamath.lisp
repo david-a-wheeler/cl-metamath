@@ -285,7 +285,7 @@ defun construct-assertion (label expression)
         hash-table-t-from-list(variables-in(expression))
     ; Put active hypotheses in right order, and note vars-used if essential.
     iter (for scope in *scopes*)
-      iter (for hyp-name in-sequence reverse(scope-active-hypotheses(scope)))
+      iter (for hyp-name in-vector scope-active-hypotheses(scope) downto 0)
         let ((hyp gethash(hyp-name *hypotheses*))) ; hyp=(name,is-floating)
           ; format t " DEBUG hyp-name=~S~%" hyp-name
           ; format t " DEBUG lookup=~S~%" hyp
