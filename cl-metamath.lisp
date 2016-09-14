@@ -117,12 +117,11 @@ defun active-variable-p (token)
 defun active-hyp-p (token)
   some (lambda (scope) position(token (scope-active-hypotheses scope))) *scopes*
 
-; Return "true" if c is whitespace character.
+; Return "true" if c is Metamath whitespace character. c must be a character.
 defun-inline whitespace-char-p (c)
-  ; declare(optimize(speed(3) safety(0)))
-  ; declare(type character c)
-  {char=(c #\space) or not(graphic-char-p(c))}
-
+  declare $ optimize(speed(3) safety(0))
+  declare $ type character c
+  member c '(#\space #\linefeed #\tab #\page #\return)
 
 defun-inline consume-whitespace ()
   declare $ optimize speed(3) safety(0)
@@ -231,17 +230,17 @@ defun verify-assertion-ref (label step stack)
           progn ; Floating hypothesis
             if not(eq(first(hypothesis) elt(elt(stack {base + i}) 0)))
               error "In proof of theorem ~A unification failed - type" label
-            ; TODO: substitution
+            ; TODO: substitution. 589
           progn ; Essential hypothesis
             ; TODO
             do-nothing()
-    ; TODO: Remove hypothesis from stack
+    ; TODO: Remove hypothesis from stack 609
     ; TODO: Verify disjoint variable conditions
     ; TODO: Done verification of this step; insert new statement onto stack
   nil
 
 defun verify-proof (label)
-  format t "DEBUG: entering verify-proof ~A~%" label
+  ; format t "DEBUG: entering verify-proof ~A~%" label
   let*
     \\
       assertion gethash(label *assertions*)
@@ -251,15 +250,15 @@ defun verify-proof (label)
       ; TODO: declare :element-type for stack.
       stack make-array(200 :fill-pointer 0 :adjustable t)
     when incomplete
-      format t "Skipping verification of incomplete proof ~A~%" label
+      ; format t "Skipping verification of incomplete proof ~A~%" label
       return-from verify-proof nil
     iter
       for step in-sequence proof
-      format t "~A " step
+      ; format t "~A " step
       if-let (hyp gethash(step *hypotheses*))
         vector-push-extend first(hyp) stack ; Push just the expression
         verify-assertion-ref(label step stack)
-    format t "~%"
+    ; format t "~%"
     ; TODO - restore these:
     ; if {length(stack) /= 1}
     ;   error "Proof of theorem ~A doesn't end with only 1 item on stack" label
@@ -510,7 +509,7 @@ defun process-metamath-file ()
           error "$} without corresponding ${"
       t read-labelled(token)
   format t " DEBUG: Processing file complete.~%"
-  show-status()
+  ; show-status()
 
 ; main entry for command line.
 defun main ()
