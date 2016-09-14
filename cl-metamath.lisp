@@ -212,6 +212,10 @@ defun insert-into-array (vector value position)
   setf (aref vector position) value
   vector
 
+defun verify-assertion-ref (label step stack)
+  ; TODO
+  nil
+
 defun verify-proof (label)
   format t "DEBUG: entering verify-proof ~A~%" label
   let*
@@ -228,8 +232,16 @@ defun verify-proof (label)
     iter
       for step in-sequence proof
       format t "~A " step
+      if-let (hyp gethash(step *hypotheses*))
+        vector-push-extend first(hyp) stack ; Push just the expression
+        verify-assertion-ref(label step stack)
     format t "~%"
-    ; TODO
+    ; TODO - restore these:
+    ; if {length(stack) /= 1}
+    ;   error "Proof of theorem ~A doesn't end with only 1 item on stack" label
+    ; if not(equal(elt(stack 0) expression))
+    ;   error "Proof of theorem ~A proves wrong statement ~S" label elt(stack 0)
+    t
 
 defun calculate-disjoint-variables (vars-used)
   declare $ ignore vars-used
