@@ -79,6 +79,7 @@ defstruct assertion ; The data stored about one assertion (axiom or theorem)
   hypotheses ; array
   disjoint-variables ; set of pairs
   expression ; sequence (currently list)
+  proof ; list (incomplete? sequence).  Sequence is array,nil if assertion.
   ; variables ; variables used (as hash).  Stored so we can parallelize?
   ;  - won't work, lookups of hypotheses, etc., will also go through
   ;  mutating hash tables.  Just read, then parallel check.
@@ -112,6 +113,10 @@ defun get-floating-hyp (hyp)
 
 defun active-variable-p (token)
   some (lambda (scope) gethash(token (scope-active-variables scope))) *scopes*
+
+; This does a linear search, but active-hypotheses is expected to be short.
+defun active-hyp-p (token)
+  some (lambda (scope) position(token (scope-active-hypotheses scope))) *scopes*
 
 ; Return "true" if c is whitespace character.
 defun-inline whitespace-char-p (c)
@@ -347,15 +352,32 @@ defun read-expression (statement-type label terminator)
           statement-type \\ label \\ sym
     expression ; return the expression (as a list)
 
-defun read-compressed-proof (label assertion)
+defun read-compressed-proof (label)
   ; TODO
   declare $ ignore label assertion
   read-to-terminator('|$.|)
 
-defun read-uncompressed-proof (label assertion first-token)
-  ; TODO
-  declare $ ignore label assertion
-  read-to-terminator('|$.|)
+defun read-uncompressed-proof (label first-token)
+  let
+    \\
+      proof make-array(500 :fill-pointer 0 :adjustable t)
+      incomplete nil ; If true, we have an incomplete proof (e.g., "?")
+    vector-push-extend first-token proof
+    iter
+      for token next read-token-skip-comment()
+      while not(eq(token '|$.|))
+      if not(token)
+        error "Unfinished $p statement ~S" label
+      if eq(token label)
+        error "Proof of theorem ~S refers to itself" label
+      if {not(gethash(token *assertions*)) and not(active-hyp-p(token))}
+        error "Proof of theorem ~S refers to itself" label
+      if eq(token '|?|)
+        setq incomplete t
+      vector-push-extend token proof
+    if incomplete
+      format t "Warning: Proof of theorem ~A is incomplete.~%" label
+    list(incomplete proof) ; return its incompleteness and the proof
 
 ; Read rest of $p
 ; TODO: Really handle
@@ -368,10 +390,13 @@ defun read-p (label)
        next-token read-token-skip-comment()
     if null(new-theorem)
       error "Empty theorem statement ~S" label
-    case next-token
-      \( read-compressed-proof(label assertion)
-      nil error("Unfinished $p statement ~S" label)
-      t read-uncompressed-proof(label assertion next-token)
+    if not(next-token)
+      error("Unfinished $p statement ~S" label)
+    setf (assertion-proof assertion)
+      if eq(next-token '\()
+        read-compressed-proof(label)
+        read-uncompressed-proof(label next-token)
+  ; TODO: At some point, verify.  Maybe wait til later so can parallelize
 
 ; Read rest of $e
 defun read-e (label)
@@ -405,8 +430,8 @@ defun show-status ()
   let ((*package* find-package('cl-metamath)))
     format t "  *constants* = ~{~A~^ ~}~%" hash-table-keys(*constants*)
     format t "  *variables* = ~{~A~^ ~}~%" hash-table-keys(*variables*)
-    ; format t "  *hypotheses* = ~{~A~^ ~}~%" hash-table-keys(*hypotheses*)
-    ; format t "  *assertions* = ~{~A~^ ~}~%" hash-table-keys(*assertions*)
+    format t "  *hypotheses* = ~{~A~^ ~}~%" hash-table-keys(*hypotheses*)
+    format t "  *assertions* = ~{~A~^ ~}~%" hash-table-keys(*assertions*)
 
 ; Read a metamath file from *standard-input*
 defun process-metamath-file ()
