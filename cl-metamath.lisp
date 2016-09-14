@@ -23,15 +23,14 @@ defvar *license* "MIT"
 ;   #+LISPWORKS system:*line-arguments-list*
 ;   #+CMU extensions:*command-line-words*
 ;   nil))
+defun my-command-line ()
+  '("demo0.mm")
 
 defmacro defun-inline (name parameters &body body)
   "Define an inline function"
   ` declaim $ inline ,name
   ` defun ,name ,parameters
       ,@body
-
-defun my-command-line ()
-  '("demo0.mm")
 
 ; TODO: Find the routine to do this less hackishly; it's not *package*.
 defparameter *self-package* find-package('cl-metamath)
