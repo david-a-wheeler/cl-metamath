@@ -79,7 +79,7 @@ defstruct assertion ; The data stored about one assertion (axiom or theorem)
   hypotheses ; array
   disjoint-variables ; set of pairs
   expression ; sequence (currently list)
-  proof ; list (incomplete? sequence).  Sequence is array,nil if assertion.
+  proof-info ; list (incomplete? sequence).  Sequence is array,nil if assertion.
   ; variables ; variables used (as hash).  Stored so we can parallelize?
   ;  - won't work, lookups of hypotheses, etc., will also go through
   ;  mutating hash tables.  Just read, then parallel check.
@@ -211,6 +211,24 @@ defun insert-into-array (vector value position)
            :end2 vector-push-extend(value vector))
   setf (aref vector position) value
   vector
+
+defun verify-proof (label)
+  format t "DEBUG: entering verify-proof ~A~%" label
+  let*
+    \\
+      assertion gethash(label *assertions*)
+      proof-info (assertion-proof-info assertion)
+      incomplete first(proof-info)
+      proof second(proof-info)
+      ; TODO: declare :element-type for stack.
+      stack make-array(200 :fill-pointer 0 :adjustable t)
+    when incomplete
+      format t "Skipping verification of incomplete proof ~A~%" label
+      return-from verify-proof nil
+    nil
+    ; iter
+    ;   for step in-sequence proof
+    ; TODO
 
 defun calculate-disjoint-variables (vars-used)
   declare $ ignore vars-used
@@ -354,7 +372,7 @@ defun read-expression (statement-type label terminator)
 
 defun read-compressed-proof (label)
   ; TODO
-  declare $ ignore label assertion
+  declare $ ignore label
   read-to-terminator('|$.|)
 
 defun read-uncompressed-proof (label first-token)
@@ -392,11 +410,12 @@ defun read-p (label)
       error "Empty theorem statement ~S" label
     if not(next-token)
       error("Unfinished $p statement ~S" label)
-    setf (assertion-proof assertion)
+    setf (assertion-proof-info assertion)
       if eq(next-token '\()
         read-compressed-proof(label)
         read-uncompressed-proof(label next-token)
-  ; TODO: At some point, verify.  Maybe wait til later so can parallelize
+  ; TODO: Verify now.  Maybe wait til later so can parallelize
+  verify-proof(label)
 
 ; Read rest of $e
 defun read-e (label)
