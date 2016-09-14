@@ -16,16 +16,6 @@
 defvar *author* "David A. Wheeler <dwheeler@dwheeler.com>"
 defvar *license* "MIT"
 
-; TODO: where's the portable library for this?
-;(defun my-command-line ()
-;  (or
-;   #+SBCL *posix-argv*
-;   #+LISPWORKS system:*line-arguments-list*
-;   #+CMU extensions:*command-line-words*
-;   nil))
-defun my-command-line ()
-  '("demo0.mm")
-
 defmacro defun-inline (name parameters &body body)
   "Define an inline function"
   ` declaim $ inline ,name
@@ -510,6 +500,16 @@ defun process-metamath-file ()
       t read-labelled(token)
   format t " DEBUG: Processing file complete.~%"
   ; show-status()
+
+; TODO: where's the portable library for this?
+;(defun my-command-line ()
+;  (or
+;   #+SBCL *posix-argv*
+;   #+LISPWORKS system:*line-arguments-list*
+;   #+CMU extensions:*command-line-words*
+;   nil))
+defun my-command-line ()
+  '("demo0.mm")
 
 ; main entry for command line.
 defun main ()
