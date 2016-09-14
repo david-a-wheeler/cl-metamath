@@ -213,7 +213,10 @@ defun insert-into-array (vector value position)
   vector
 
 defun verify-assertion-ref (label step stack)
-  ; TODO
+  let ((assertion gethash(step *assertions*)))
+    if {length(stack) < length(assertion-hypotheses(assertion))}
+      error "In proof of theorem ~A step ~A stack too short" label step
+    ; TODO !!!
   nil
 
 defun verify-proof (label)
