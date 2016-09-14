@@ -225,9 +225,10 @@ defun verify-proof (label)
     when incomplete
       format t "Skipping verification of incomplete proof ~A~%" label
       return-from verify-proof nil
-    nil
-    ; iter
-    ;   for step in-sequence proof
+    iter
+      for step in-sequence proof
+      format t "~A " step
+    format t "~%"
     ; TODO
 
 defun calculate-disjoint-variables (vars-used)
