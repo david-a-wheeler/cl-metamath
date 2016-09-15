@@ -33,6 +33,36 @@ but some decisions make a big difference to performance.  Some tips:
 I develop with sbcl; various runoffs suggest it's the fastest FLOSS
 implementation.
 
+## Type declarations
+
+Explicit type declarations make it easier to detect errors, and
+can also produce faster code.  Sbcl (the implementation used for development)
+and its CMU ("Python") predecessor can do a lot of type inference,
+but only when they're given some information to start.
+[CMUCL documentation on efficiency hints](https://common-lisp.net/project/cmucl/doc/cmu-user/compiler-hint.html)
+has lots of hints on types related to performance, in particular:
+* Declare the types of all function arguments and structure slots as
+  precisely as possible (while avoiding not, and and satisfies). Put these
+  declarations in during initial coding so that type assertions can find
+  bugs for you during debugging.
+* Use the member type specifier where there are a small number of possible
+  symbol values, for example: (member :red :blue :green).
+* Use the or type specifier in situations where the type is not certain,
+  but there are only a few possibilities, for example: (or list vector).
+* Declare integer types with the tightest bounds that you can, such as
+  (integer 3 7).
+* Define deftype or defstruct types before they are used. Definition
+  after use is legal (producing no "undefined type" warnings), but type
+  tests and structure operations will be compiled much less efficiently.
+
+For function declarations, use the standard Common Lisp declaim ftype,
+not the nonstandard "values" declaration.
+
+For global type information, prefer "declaim" (not "proclaim") since
+it's effective at compile time (proclaim typically is not).
+For local declarations, use "declare".  See:
+http://stackoverflow.com/questions/14813801/proclaim-declaim-declare
+
 ## Reading quickly
 
 We have

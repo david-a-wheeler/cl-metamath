@@ -28,8 +28,10 @@ defparameter *self-package* find-package('cl-metamath)
 ; Extra code to *quickly* read files.
 
 defvar mmbuffer
+declaim $ type simple-array(unsigned-byte(8)) mmbuffer
 defvar mmbuffer-position 0
 defvar mmbuffer-length 0
+declaim $ type fixnum mmbuffer-position mmbuffer-length
 defun load-mmfile (filename)
   ; format t "DEBUG: Starting load-mmfile~%"
   ; (declare (optimize (speed 3) (debug 0) (safety 0)))
@@ -42,8 +44,7 @@ defun load-mmfile (filename)
 ; Optimized version of read-char()
 defun my-read-char ()
   declare $ optimize speed(3) safety(0)
-  declare $ type fixnum mmbuffer-position mmbuffer-length
-  declare simple-array(unsigned-byte(8))(mmbuffer)
+  declare $ ftype function(() {character or null}) my-read-char
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
@@ -54,8 +55,7 @@ defun my-read-char ()
 ; Optimized version of peek-char(nil nil nil nil)
 defun my-peek-char ()
   declare $ optimize speed(3) safety(0)
-  declare $ type fixnum mmbuffer-position mmbuffer-length
-  declare simple-array(unsigned-byte(8))(mmbuffer)
+  declare $ ftype function(() {character or null}) my-peek-char
   if {mmbuffer-position >= mmbuffer-length}
     nil
     let ((result aref(mmbuffer mmbuffer-position)))
@@ -64,20 +64,21 @@ defun my-peek-char ()
         error "Code point >127: ~S." result
         code-char result
 
+; TODO: specify :type of members.
 defstruct assertion ; The data stored about one assertion (axiom or theorem)
-  hypotheses ; array
+  hypotheses nil :type vector(list)
   disjoint-variables ; set of pairs
-  expression ; sequence (currently list)
-  proof-info ; list (incomplete? sequence).  Sequence is array,nil if assertion.
+  expression nil :type list ; sequence (currently list)
+  proof-info nil :type list ; list (incomplete? sequence).  Sequence is array,nil if assertion.
   ; variables ; variables used (as hash).  Stored so we can parallelize?
   ;  - won't work, lookups of hypotheses, etc., will also go through
   ;  mutating hash tables.  Just read, then parallel check.
 
 defstruct scope ; The data stored in a single scope
-  active-variables ; :type hash-table ; t if active
-  active-hypotheses ; :type vector of symbols ; labels
-  disjoint-variables ; :type vector of hash-tables ; each $d
-  floating-hypotheses ; :type hash-table ; maps variable->label of typedef
+  active-variables nil :type hash-table ; symbol -> boolean
+  active-hypotheses nil :type vector(symbol) ; symbols are labels
+  disjoint-variables nil :type vector(hash-table) ; each $d
+  floating-hypotheses nil :type hash-table ; variable->typedef label
 
 defun create-scope ()
   make-scope
@@ -88,11 +89,13 @@ defun create-scope ()
 
 ; list of currently-active scopes; first is deepest-nested scope
 defparameter *scopes* list(create-scope())
+declaim $ type list *scopes*
 
 defparameter *constants* make-hash-table(:test #'eq :size 4000)
 defparameter *variables* make-hash-table(:test #'eq :size 1000)
 defparameter *hypotheses* make-hash-table(:test #'eq) ; label -> (stmt is-$f)
 defparameter *assertions* make-hash-table(:test #'eq) ; label -> assertion
+declaim $ type hash-table *constant* *variables* *hypotheses* *assertions*
 
 defun label-used-p (label)
   {gethash(label *hypotheses*) or gethash(label *assertions*)}
@@ -105,7 +108,8 @@ defun active-variable-p (token)
 
 ; This does a linear search, but active-hypotheses is expected to be short.
 defun active-hyp-p (token)
-  some (lambda (scope) position(token (scope-active-hypotheses scope))) *scopes*
+  some (lambda (scope)
+          position(token (scope-active-hypotheses scope) :test #'eq)) *scopes*
 
 ; Return "true" if c is Metamath whitespace character. c must be a character.
 defun-inline whitespace-char-p (c)
@@ -116,9 +120,10 @@ defun-inline whitespace-char-p (c)
 defun-inline consume-whitespace ()
   declare $ optimize speed(3) safety(0)
   iter
-     for c = my-peek-char()
-     while {c and whitespace-char-p(c)}
-     my-read-char()
+    declare $ type {character or nil} c
+    for c = my-peek-char()
+    while {c and whitespace-char-p(c)}
+    my-read-char()
 
 ; Skip characters within a "$(" comment.
 ; "$)" ends, but must be whitespace separated.
@@ -126,7 +131,8 @@ defun-inline consume-whitespace ()
 defun read-comment ()
   declare $ optimize speed(3) safety(0)
   iter
-    consume-whitespace
+    ; declare $ type {character or null} c ; null, not nil; nil means "no type"
+    consume-whitespace()
     for c = my-peek-char()
     if not(c)
       error "Unterminated comment"
@@ -143,6 +149,7 @@ defun read-comment ()
 ; comparisons with inline constants like '|$p| would work.
 defun read-token ()
   ; declare $ optimize speed(3) safety(0)
+  declare $ ftype function(() {symbol or null}) read-token
   consume-whitespace()
   let
     $ cur make-array(20 :element-type 'character :fill-pointer 0 :adjustable t)
@@ -157,6 +164,7 @@ defun read-token ()
 
 ; Read a token, but skip $(...$)
 defun read-token-skip-comment ()
+  declare $ ftype function(() {symbol or null}) read-token-skip-comment
   iter
     for token = read-token()
     when eq(token '|$(|)
@@ -166,6 +174,7 @@ defun read-token-skip-comment ()
 
 ; Read tokens until terminator, return list of tokens
 defun read-to-terminator (terminator)
+  declare $ ftype function(() list) read-to-terminator
   iter
     for token = read-token-skip-comment()
     if not(token)
@@ -176,6 +185,7 @@ defun read-to-terminator (terminator)
 ; Return true if sym is a "math symbol" (does not contain "$")
 ; See Matamath book section 4.1.1.
 defun-inline mathsymbolp (sym)
+  declare $ ftype function((symbol) boolean) mathsymbolp
   not(find(#\$ symbol-name(sym)))
 
 ; Return true if it's a list of length 1, trickier to be efficient.
@@ -189,19 +199,23 @@ defun-inline variables-in (expression)
   remove-if-not #'mmvariablep expression
 
 defun hash-table-t-from-list (old-list) ; Create hash table with "t" values
+  declare $ ftype function((list) hash-table) hash-table-t-from-list
   let ((new-table make-hash-table(:test #'eq)))
     dolist (x old-list new-table)
       setf gethash(x new-table) t
 
 ; Insert into array.  *Modifies* vector.
 defun insert-into-array (vector value position)
-  replace(vector vector :start2 position :start1 1+(position)
+  declare $ ftype function((vector t fixnum) vector) insert-into-array
+  declare $ type fixnum position ; this shouldn't be needed
+  replace(vector vector :start2 position :start1 (the fixnum 1+(position))
            :end2 vector-push-extend(value vector))
   setf (aref vector position) value
   vector
 
 defun verify-assertion-ref (label step stack)
   "Verify step given stack; modifies stack"
+  declare $ ftype function((symbol symbol vector) boolean) verify-assertion-ref
   let*
     \\
       assertion gethash(step *assertions*)
@@ -213,6 +227,7 @@ defun verify-assertion-ref (label step stack)
       error "In proof of theorem ~A step ~A stack too short" label step
     ; TODO !!!
     iter (for i from 0 below num-assertion-hypotheses)
+      declare $ type fixnum i
       let
         $ hypothesis
           gethash(elt(assertion-hypotheses(assertion) i) *hypotheses*)
@@ -231,6 +246,7 @@ defun verify-assertion-ref (label step stack)
 
 defun verify-proof (label)
   ; format t "DEBUG: entering verify-proof ~A~%" label
+  declare $ ftype function((symbol) boolean) verify-proof
   let*
     \\
       assertion gethash(label *assertions*)
