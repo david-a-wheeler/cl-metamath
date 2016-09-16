@@ -11,7 +11,7 @@
 ; Switch to sweet-expressions - from here on the code is more readable.
 (readable:enable-sweet)
 
-; declaim $ optimize speed
+; declaim $ optimize speed ; Uncomment to see optimization hints
 
 defvar *author* "David A. Wheeler <dwheeler@dwheeler.com>"
 defvar *license* "MIT"
@@ -68,7 +68,7 @@ defun my-peek-char ()
 defstruct assertion ; The data stored about one assertion (axiom or theorem)
   hypotheses nil :type vector(list)
   disjoint-variables ; set of pairs
-  expression nil :type list ; sequence (currently list)
+  expression nil :type vector(symbol)
   proof-info nil :type list ; list (incomplete? sequence).  Sequence is array,nil if assertion.
   ; variables ; variables used (as hash).  Stored so we can parallelize?
   ;  - won't work, lookups of hypotheses, etc., will also go through
@@ -95,7 +95,7 @@ defparameter *constants* make-hash-table(:test #'eq :size 4000)
 defparameter *variables* make-hash-table(:test #'eq :size 1000)
 defparameter *hypotheses* make-hash-table(:test #'eq) ; label -> (stmt is-$f)
 defparameter *assertions* make-hash-table(:test #'eq) ; label -> assertion
-declaim $ type hash-table *constant* *variables* *hypotheses* *assertions*
+declaim $ type hash-table *constants* *variables* *hypotheses* *assertions*
 
 defun label-used-p (label)
   {gethash(label *hypotheses*) or gethash(label *assertions*)}
@@ -172,7 +172,21 @@ defun read-token-skip-comment ()
       next-iteration()
     return token
 
+; ; Read tokens until terminator, return vector of tokens
+; defun read-to-terminator (terminator)
+;   declare $ ftype function(() vector) read-to-terminator
+;   iter
+;     with tokens = make-array(254 :fill-pointer 0 :adjustable t)
+;     for token = read-token-skip-comment()
+;     if not(token)
+;       error "Early termination without ~S~%" terminator
+;     while not(eq(token terminator))
+;     vector-push-extend token tokens
+;     finally
+;       tokens
+
 ; Read tokens until terminator, return list of tokens
+; Probably should be removed & have loops moved into their own functions.
 defun read-to-terminator (terminator)
   declare $ ftype function(() list) read-to-terminator
   iter
@@ -196,13 +210,25 @@ defun-inline mmvariablep (symbol) ; Return true-value if symbol is mm variable
   gethash(symbol *variables*)
 
 defun-inline variables-in (expression)
+  declare $ ftype function((vector) vector) variables-in
   remove-if-not #'mmvariablep expression
 
-defun hash-table-t-from-list (old-list) ; Create hash table with "t" values
-  declare $ ftype function((list) hash-table) hash-table-t-from-list
-  let ((new-table make-hash-table(:test #'eq)))
-    dolist (x old-list new-table)
-      setf gethash(x new-table) t
+; defun hash-table-t-from-list (old-list) ; Create hash table with "t" values
+;   declare $ ftype function((list) hash-table) hash-table-t-from-list
+;   let ((new-table make-hash-table(:test #'eq)))
+;     dolist (x old-list new-table)
+;       setf gethash(x new-table) t
+
+defun hash-table-t-from-vector (vec) ; Create hash table with "t" values
+  declare $ ftype function((vector) hash-table) hash-table-t-from-vector
+  declare $ type vector(symbol) vec
+  iter
+    with new-table = make-hash-table(:test #'eq)
+    for key in-vector vec with-index i
+    declare $ type fixnum i
+    declare $ type symbol key
+    setf gethash(key new-table) t
+    finally $ return new-table
 
 ; Insert into array.  *Modifies* vector.
 defun insert-into-array (vector value position)
@@ -259,7 +285,8 @@ defun verify-proof (label)
       ; format t "Skipping verification of incomplete proof ~A~%" label
       return-from verify-proof nil
     iter
-      for step in-sequence proof
+      for step in-vector proof with-index i
+      declare $ type fixnum i
       ; format t "~A " step
       if-let (hyp gethash(step *hypotheses*))
         vector-push-extend first(hyp) stack ; Push just the expression
@@ -278,6 +305,7 @@ defun calculate-disjoint-variables (vars-used)
 
 defun construct-assertion (label expression)
   ; format t "DEBUG construct-assertion expression=~S~%" expression
+  declare $ ftype function((symbol vector) assertion) construct-assertion
   let*
     \\
       new-assertion
@@ -286,7 +314,8 @@ defun construct-assertion (label expression)
           :disjoint-variables \\ nil ; \\ make-hash-table(:test #'equal)
           :expression \\ expression
       vars-used ; We could store this in an assertion slot if we wanted to
-        hash-table-t-from-list(variables-in(expression))
+        hash-table-t-from-vector(variables-in(expression))
+    declare $ type hash-table vars-used ; TODO: Why is vars-used unavailable?
     ; Put active hypotheses in right order, and note vars-used if essential.
     iter (for scope in *scopes*)
       iter (for hyp-name in-vector scope-active-hypotheses(scope) downto 0)
@@ -298,11 +327,11 @@ defun construct-assertion (label expression)
               insert-into-array assertion-hypotheses(new-assertion) hyp 0
             not(second(hyp)) ; Essential hypothesis
               insert-into-array assertion-hypotheses(new-assertion) hyp 0
-              iter (for sym in first(hyp))
+              iter (for sym in-vector first(hyp))
                 if mmvariablep(sym)
                   setf gethash(sym vars-used) t
     setf assertion-disjoint-variables(new-assertion)
-      calculate-disjoint-variables(vars-used)
+     calculate-disjoint-variables(vars-used)
     setf gethash(label *assertions*) new-assertion ; Add to set of assertions
     new-assertion
 
@@ -379,38 +408,49 @@ defun read-variables ()
 ; Read rest of $f
 defun read-f (label)
   ; format t "Reading $f in label ~S~%" label
+  ; TODO: Just read them in one-by-one.
   let ((statement read-to-terminator('|$.|)))
     if {length(statement) /= 2}
       error "Must have exactly two symbols in $f"
-    if not(gethash(first(statement) *constants*))
+    if not(gethash(elt(statement 0) *constants*))
       error "First symbol in $f statement ~S is ~S, which is not a constant"
-        label \\ first(statement)
-    if not(active-variable-p(second(statement)))
+        label \\ elt(statement 0)
+    if not(active-variable-p(elt(statement 1)))
       error "Second symbol in $f statement ~S is ~S, which is not a variable"
-        label \\ second(statement)
+        label \\ elt(statement 1)
     ; Create new floating hypothesis
     ; Like hypotheses.insert(std::make_pair(label,std::make_pair(newhyp,true)))
     setf gethash(label *hypotheses*) list(statement t)
     ; Like scopes.back().activehyp.push_back(label);
-    vector-push-extend label scope-active-hypotheses(first(*scopes*))
+    vector-push-extend label scope-active-hypotheses(elt(*scopes* 0))
     ; Like scopes.back().floatinghyp.insert(std::make_pair(variable, label));
     setf
-      gethash second(statement) scope-floating-hypotheses(first(*scopes*))
+      gethash second(statement) scope-floating-hypotheses(elt(*scopes* 0))
       label
 
 defun read-expression (statement-type label terminator)
-  let ((expression read-to-terminator(terminator)))
-    if null(expression)
+  "Read a mathematical expression (key part of $a, $p, or $e)"
+  declare $ ftype function((character symbol symbol) vector) read-expression
+  let
+    \\
+      first read-token-skip-comment()
+      expression make-array(254 :fill-pointer 0 :adjustable t)
+    if null(first)
       error "Unfinished $~c statement ~S" statement-type label
-    if not(gethash(first(expression) *constants*))
+    if not(gethash(first *constants*))
       error "First symbol in $~c statement ~S is ~S which is not a constant"
-        statement-type \\ label \\ first(expression)
+        statement-type \\ label \\ first
+    vector-push-extend first expression
     iter
-      for sym in expression
+      for sym = read-token-skip-comment()
+      if null(sym)
+        error "Unfinished $~c statement ~S" statement-type label
+      while not(eq(sym terminator))
       if {not(gethash(sym *constants*)) and not(get-floating-hyp(sym))}
         error "In $~c statement ~S, token ~S is not constant or variable in $f"
           statement-type \\ label \\ sym
-    expression ; return the expression (as a list)
+      vector-push-extend sym expression
+    expression ; return the expression (as a vector)
 
 defun read-compressed-proof (label)
   ; TODO
@@ -445,10 +485,10 @@ defun read-p (label)
   ; format t "Reading $p in label ~S~%" label
   let*
     \\
-       new-theorem read-to-terminator('|$=|)
+       new-theorem read-expression(#\p label '|$=|)
        assertion construct-assertion(label new-theorem)
        next-token read-token-skip-comment()
-    if null(new-theorem)
+    if {length(new-theorem) = 0}
       error "Empty theorem statement ~S" label
     if not(next-token)
       error("Unfinished $p statement ~S" label)
