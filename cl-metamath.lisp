@@ -240,39 +240,45 @@ defun insert-into-array (vector value position)
   vector
 
 defun verify-assertion-ref (label step stack)
-  "Verify step given stack; modifies stack"
+  "Verify step given stack; modifies stack (which must have a fill pointer)"
   declare $ ftype function((symbol symbol vector) boolean) verify-assertion-ref
+  format t " DEBUG6: step ~S stack ~S~%" step stack
   let*
     \\
       assertion gethash(step *assertions*)
-      num-assertion-hypotheses length(assertion-hypotheses(assertion))
+      this-assertion-hypotheses assertion-hypotheses(assertion)
+      num-assertion-hypotheses length(this-assertion-hypotheses)
       base {length(stack) - num-assertion-hypotheses}
       ; TODO: define
       ; substitutions make-hash-table(:test #'eq) ; variable->expression
     if {base < 0}
       error "In proof of theorem ~A step ~A stack too short" label step
-    ; TODO !!!
     iter (for i from 0 below num-assertion-hypotheses)
       declare $ type fixnum i
-      let
-        $ hypothesis
-          gethash(elt(assertion-hypotheses(assertion) i) *hypotheses*)
-        if second(hypothesis) ; floating?
+      let ; walk through each hypothesis
+        $ hypothesis gethash(elt(this-assertion-hypotheses i) *hypotheses*)
+        if second(hypothesis) ; is it floating?
           progn ; Floating hypothesis
+            format t " DEBUG7a: floating. ~S - ~S~%" first(hypothesis) elt(first(hypothesis) 1)
             if not(eq(first(hypothesis) elt(elt(stack {base + i}) 0)))
               error "In proof of theorem ~A unification failed - type" label
-            ; TODO: substitution. 589
+              ; TODO: substitution. 589
+              ; $ subst first(hypothesis) expression
           progn ; Essential hypothesis
             ; TODO
+            ; format t " DEBUG7b: essential. ~S~%" hypothesis
             do-nothing()
-    ; TODO: Remove hypothesis from stack 609
+    ; TODO: Remove hypothesis from stack 609 - check for off-by-one
+    setf (fill-pointer stack) 1-(base)
+    format t " DEBUG12 - after setf fill-pointer: step ~S stack ~S~%" step stack
     ; TODO: Verify disjoint variable conditions
     ; TODO: Done verification of this step; insert new statement onto stack
+    vector-push-extend '(term t BOGUS) stack ; Push just the expression
   nil
 
 defun verify-proof (label)
-  ; format t "DEBUG: entering verify-proof ~A~%" label
   declare $ ftype function((symbol) boolean) verify-proof
+  format t "DEBUG: entering verify-proof ~A~%" label
   let*
     \\
       assertion gethash(label *assertions*)
@@ -287,6 +293,7 @@ defun verify-proof (label)
     iter
       for step in-vector proof with-index i
       declare $ type fixnum i
+      format t "DEBUG5: checking step ~S~%" step
       ; format t "~A " step
       if-let (hyp gethash(step *hypotheses*))
         vector-push-extend first(hyp) stack ; Push just the expression
@@ -297,7 +304,7 @@ defun verify-proof (label)
     ;   error "Proof of theorem ~A doesn't end with only 1 item on stack" label
     ; if not(equal(elt(stack 0) expression))
     ;   error "Proof of theorem ~A proves wrong statement ~S" label elt(stack 0)
-    t
+  t
 
 defun calculate-disjoint-variables (vars-used)
   declare $ ignore vars-used
