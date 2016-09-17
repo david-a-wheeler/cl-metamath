@@ -250,7 +250,7 @@ defun verify-assertion-ref (label step stack)
       num-assertion-hypotheses length(this-assertion-hypotheses)
       base {length(stack) - num-assertion-hypotheses}
       ; TODO: define
-      ; substitutions make-hash-table(:test #'eq) ; variable->expression
+      substitutions make-hash-table(:test #'eq) ; variable->expression
     if {base < 0}
       error "In proof of theorem ~A step ~A stack too short" label step
     iter (for i from 0 below num-assertion-hypotheses)
@@ -260,10 +260,11 @@ defun verify-assertion-ref (label step stack)
         if second(hypothesis) ; is it floating?
           progn ; Floating hypothesis
             format t " DEBUG7a: floating. ~S - ~S~%" first(hypothesis) elt(first(hypothesis) 1)
-            if not(eq(first(hypothesis) elt(elt(stack {base + i}) 0)))
+            if not(eq(elt(first(hypothesis) 0) elt(elt(stack {base + i}) 0)))
               error "In proof of theorem ~A unification failed - type" label
-              ; TODO: substitution. 589
-              ; $ subst first(hypothesis) expression
+            ; 589. Record sequence as the intended substitution.
+            setf gethash(elt(first(hypothesis) 1) substitutions)
+              subseq stack {base + i} 1
           progn ; Essential hypothesis
             ; TODO
             ; format t " DEBUG7b: essential. ~S~%" hypothesis
