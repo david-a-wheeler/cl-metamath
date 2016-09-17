@@ -233,11 +233,29 @@ defun hash-table-t-from-vector (vec) ; Create hash table with "t" values
 ; Insert into array.  *Modifies* vector.
 defun insert-into-array (vector value position)
   declare $ ftype function((vector t fixnum) vector) insert-into-array
-  declare $ type fixnum position ; this shouldn't be needed
+  declare $ type fixnum position ; this declaration shouldn't be needed
   replace(vector vector :start2 position :start1 (the fixnum 1+(position))
            :end2 vector-push-extend(value vector))
   setf (aref vector position) value
   vector
+
+defun vector-multipush (terms dest)
+  declare $ type vector terms dest
+  iter
+    for term in terms
+    vector-push-extend term dest
+  nil
+
+defun make-substitution (original substitutions)
+  declare $ ftype function((vector hash-table) vector) make-substitution
+  let ((new-expression make-array(200 :fill-pointer 0 :adjustable t)))
+    iter
+      for term in-vector original
+      if gethash(term substitutions) ; do we have a substitution?
+        vector-multipush gethash(term substitutions) new-expression ; yes
+        vector-push-extend term new-expression ; no, it's a constant
+    format t "make-substitution got ~S, returned ~S~%" original new-expression
+    new-expression ; return new (substituted) version
 
 defun verify-assertion-ref (label step stack)
   "Verify step given stack; modifies stack (which must have a fill pointer)"
@@ -257,24 +275,31 @@ defun verify-assertion-ref (label step stack)
       declare $ type fixnum i
       let ; walk through each hypothesis
         $ hypothesis gethash(elt(this-assertion-hypotheses i) *hypotheses*)
+        format t " DEBUG50: Handling hypothesis # ~S~%" i
+        format t " this-assertion-hypotheses ~S~%" this-assertion-hypotheses
+        format t " DEBUG20: Hypothesis ~S~%" hypothesis
         if second(hypothesis) ; is it floating?
           progn ; Floating hypothesis
             format t " DEBUG7a: floating. ~S - ~S~%" first(hypothesis) elt(first(hypothesis) 1)
-            if not(eq(elt(first(hypothesis) 0) elt(elt(stack {base + i}) 0)))
+            when not(eq(elt(first(hypothesis) 0) elt(elt(stack {base + i}) 0)))
               error "In proof of theorem ~A unification failed - type" label
             ; 589. Record sequence as the intended substitution.
             setf gethash(elt(first(hypothesis) 1) substitutions)
               subseq stack {base + i} 1
-          progn ; Essential hypothesis
-            ; TODO
-            ; format t " DEBUG7b: essential. ~S~%" hypothesis
-            do-nothing()
+          let ((result make-substitution(first(hypothesis) substitutions)))
+            when not(equal(result elt(stack {base + i})))
+              error "Unification failed. unification has ~S but stack has ~S~%"
+                result \\ elt(stack {base + i})
+              error " hypothesis ~S~% substutitutions ~S~%"
+                hypothesis \\ substitutions
     ; TODO: Remove hypothesis from stack 609 - check for off-by-one
     setf (fill-pointer stack) 1-(base)
-    format t " DEBUG12 - after setf fill-pointer: step ~S stack ~S~%" step stack
+    format t " DEBUG12 - after setf fill-pointer: step ~S~%  stack ~S~%" step stack
     ; TODO: Verify disjoint variable conditions
     ; TODO: Done verification of this step; insert new statement onto stack
-    vector-push-extend '(term t BOGUS) stack ; Push just the expression
+    vector-push-extend
+      make-substitution assertion-expression(assertion) substitutions
+      stack
   nil
 
 defun verify-proof (label)
