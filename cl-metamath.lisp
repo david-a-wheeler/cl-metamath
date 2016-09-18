@@ -66,7 +66,7 @@ defun my-peek-char ()
 
 ; TODO: specify :type of members.
 defstruct assertion ; The data stored about one assertion (axiom or theorem)
-  hypotheses nil :type vector(list)
+  hypotheses nil :type vector(symbol)
   disjoint-variables ; set of pairs
   expression nil :type vector(symbol)
   proof-info nil :type list ; list (incomplete? sequence).  Sequence is array,nil if assertion.
@@ -261,6 +261,7 @@ defun verify-assertion-ref (label step stack)
   "Verify step given stack; modifies stack (which must have a fill pointer)"
   declare $ ftype function((symbol symbol vector) boolean) verify-assertion-ref
   format t " DEBUG6: step ~S stack ~S~%" step stack
+  format t " assertion: ~S~%" gethash(step *assertions*)
   let*
     \\
       assertion gethash(step *assertions*)
@@ -271,13 +272,20 @@ defun verify-assertion-ref (label step stack)
       substitutions make-hash-table(:test #'eq) ; variable->expression
     if {base < 0}
       error "In proof of theorem ~A step ~A stack too short" label step
+    format t " DEBUG59: About to iterate~%"
     iter (for i from 0 below num-assertion-hypotheses)
       declare $ type fixnum i
-      let ; walk through each hypothesis
-        $ hypothesis gethash(elt(this-assertion-hypotheses i) *hypotheses*)
+      format t " DEBUG57: elt this-assertion-hypotheses i~S~%"
+        elt(this-assertion-hypotheses i)
+      let*
+        \\
+          current-hypothesis elt(this-assertion-hypotheses i)
+          hypothesis gethash(current-hypothesis *hypotheses*)
         format t " DEBUG50: Handling hypothesis # ~S~%" i
         format t " this-assertion-hypotheses ~S~%" this-assertion-hypotheses
+        format t " current-hypothesis ~S~%" current-hypothesis
         format t " DEBUG20: Hypothesis ~S~%" hypothesis
+        format t " DEBUG20: *hypotheses* ~S~%" hash-table-alist(*hypotheses*)
         if second(hypothesis) ; is it floating?
           progn ; Floating hypothesis
             format t " DEBUG7a: floating. ~S - ~S~%" first(hypothesis) elt(first(hypothesis) 1)
@@ -286,13 +294,16 @@ defun verify-assertion-ref (label step stack)
             ; 589. Record sequence as the intended substitution.
             setf gethash(elt(first(hypothesis) 1) substitutions)
               subseq stack {base + i} 1
-          let ((result make-substitution(first(hypothesis) substitutions)))
+          ; Not Floating
+          let*
+            \\
+              actual-hypothesis first(hypothesis)
+              result make-substitution(actual-hypothesis substitutions)
+            format t "DEBUG BOGUS ~S ~S~%" actual-hypothesis result
             when not(equal(result elt(stack {base + i})))
               error "Unification failed. unification has ~S but stack has ~S~%"
                 result \\ elt(stack {base + i})
-              error " hypothesis ~S~% substutitutions ~S~%"
-                hypothesis \\ substitutions
-    ; TODO: Remove hypothesis from stack 609 - check for off-by-one
+    ; Remove hypothesis from stack
     setf (fill-pointer stack) 1-(base)
     format t " DEBUG12 - after setf fill-pointer: step ~S~%  stack ~S~%" step stack
     ; TODO: Verify disjoint variable conditions
@@ -322,7 +333,9 @@ defun verify-proof (label)
       format t "DEBUG5: checking step ~S~%" step
       ; format t "~A " step
       if-let (hyp gethash(step *hypotheses*))
-        vector-push-extend first(hyp) stack ; Push just the expression
+        when t
+          vector-push-extend first(hyp) stack ; Push just the expression
+          format t " DEBUG99: Just pushed ~S~%" first(hyp)
         verify-assertion-ref(label step stack)
     ; format t "~%"
     ; TODO - restore these:
@@ -357,9 +370,9 @@ defun construct-assertion (label expression)
           ; format t " DEBUG lookup=~S~%" hyp
           cond
             {second(hyp) and gethash(first(hyp) vars-used)} ; Mandatory floating
-              insert-into-array assertion-hypotheses(new-assertion) hyp 0
+              insert-into-array assertion-hypotheses(new-assertion) hyp-name 0
             not(second(hyp)) ; Essential hypothesis
-              insert-into-array assertion-hypotheses(new-assertion) hyp 0
+              insert-into-array assertion-hypotheses(new-assertion) hyp-name 0
               iter (for sym in-vector first(hyp))
                 if mmvariablep(sym)
                   setf gethash(sym vars-used) t

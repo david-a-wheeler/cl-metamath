@@ -9,6 +9,7 @@ fi
 sbcl <<END
 (require :asdf)
 (asdf:load-system :cl-metamath)
+(in-package :cl-metamath)
 (cl-metamath:load-mmfile "$FILENAME")
 (cl-metamath:process-metamath-file)
 END
