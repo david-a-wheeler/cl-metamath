@@ -299,7 +299,8 @@ defun verify-assertion-ref (label step stack)
             \\
               actual-hypothesis first(hypothesis)
               result make-substitution(actual-hypothesis substitutions)
-            format t "DEBUG BOGUS ~S ~S~%" actual-hypothesis result
+            format t "DEBUG About to compare ~S substituted to ~S~%" actual-hypothesis result
+            format t " stack=~S~%" stack
             when not(equal(result elt(stack {base + i})))
               error "Unification failed. unification has ~S but stack has ~S~%"
                 result \\ elt(stack {base + i})
@@ -311,6 +312,7 @@ defun verify-assertion-ref (label step stack)
     vector-push-extend
       make-substitution assertion-expression(assertion) substitutions
       stack
+    format t " DEBUG77 - end of verify-step for ~S~%  stack ~S~%" step stack
   nil
 
 defun verify-proof (label)
@@ -333,9 +335,9 @@ defun verify-proof (label)
       format t "DEBUG5: checking step ~S~%" step
       ; format t "~A " step
       if-let (hyp gethash(step *hypotheses*))
-        when t
-          vector-push-extend first(hyp) stack ; Push just the expression
-          format t " DEBUG99: Just pushed ~S~%" first(hyp)
+        let ((pushme make-array(2 :adjustable t :initial-contents first(hyp))))
+          vector-push-extend pushme stack ; Push just the expression
+          format t " DEBUG99: Just pushed ~S~%" pushme
         verify-assertion-ref(label step stack)
     ; format t "~%"
     ; TODO - restore these:
