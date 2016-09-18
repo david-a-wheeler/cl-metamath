@@ -254,7 +254,7 @@ defun make-substitution (original substitutions)
       if gethash(term substitutions) ; do we have a substitution?
         vector-multipush gethash(term substitutions) new-expression ; yes
         vector-push-extend term new-expression ; no, it's a constant
-    format t "make-substitution got ~S, returned ~S~%" original new-expression
+    format t "make-substitution got ~S, , returned ~S~% substitutions ~S~%" original new-expression substitutions
     new-expression ; return new (substituted) version
 
 defun verify-assertion-ref (label step stack)
