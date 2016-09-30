@@ -25,6 +25,18 @@ defmacro defun-inline (name parameters &body body)
 ; TODO: Find the routine to do this less hackishly; it's not *package*.
 defparameter *self-package* find-package('cl-metamath)
 
+; Show state - useful for debuggging
+defun show-state-inline (x)
+  cond
+    null(x) $ format t "nil"
+    t $ format t "TODO"
+
+; Show state - useful for debuggging
+defun show-state (x message)
+  format t "~a " message
+  show-state-inline x
+  format t "~% "
+
 ; Extra code to *quickly* read files.
 
 defvar mmbuffer
@@ -254,7 +266,7 @@ defun make-substitution (original substitutions)
       if gethash(term substitutions) ; do we have a substitution?
         vector-multipush gethash(term substitutions) new-expression ; yes
         vector-push-extend term new-expression ; no, it's a constant
-    format t "make-substitution got ~S, , returned ~S~% substitutions ~S~%" original new-expression substitutions
+    format t "make-substitution got ~S, returned ~S~% substitutions ~S~%" original new-expression substitutions
     new-expression ; return new (substituted) version
 
 defun verify-assertion-ref (label step stack)
@@ -306,7 +318,7 @@ defun verify-assertion-ref (label step stack)
                 result \\ elt(stack {base + i})
     ; Remove hypothesis from stack
     setf (fill-pointer stack) 1-(base)
-    format t " DEBUG12 - after setf fill-pointer: step ~S~%  stack ~S~%" step stack
+    ; format t " DEBUG12 - after setf fill-pointer: step ~S~%  stack ~S~%" step stack
     ; TODO: Verify disjoint variable conditions
     ; TODO: Done verification of this step; insert new statement onto stack
     vector-push-extend
@@ -332,7 +344,7 @@ defun verify-proof (label)
     iter
       for step in-vector proof with-index i
       declare $ type fixnum i
-      format t "DEBUG5: checking step ~S~%" step
+      ; format t "DEBUG5: checking step ~S~%" step
       ; format t "~A " step
       if-let (hyp gethash(step *hypotheses*))
         let ((pushme make-array(2 :adjustable t :initial-contents first(hyp))))

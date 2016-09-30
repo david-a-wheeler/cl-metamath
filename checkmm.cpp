@@ -402,6 +402,8 @@ Assertion & constructassertion(std::string const label, Expression const & exp)
             }
         }
     }
+    std::cout << "DEBUG: constructassertion " << label
+       << " hypotheses.size " << assertion.hypotheses.size() << std::endl;
 
     return assertion;
 }
